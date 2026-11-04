@@ -1,0 +1,17 @@
+# Finales de línea fijos, sin importar la configuración de Git de cada quien.
+# Por defecto Git normaliza el texto a LF dentro del repositorio.
+* text=auto
+
+# gradlew lo ejecuta bash (Git Bash, Linux, Mac): SIEMPRE LF.
+# Con CRLF falla con el error "/usr/bin/env: 'sh\r': No such file or directory".
+gradlew text eol=lf
+*.sh    text eol=lf
+
+# Los .bat los ejecuta Windows: SIEMPRE CRLF.
+*.bat   text eol=crlf
+
+# Binarios: no tocar.
+*.jar   binary
+*.png   binary
+*.webp  binary
+*.jpg   binary

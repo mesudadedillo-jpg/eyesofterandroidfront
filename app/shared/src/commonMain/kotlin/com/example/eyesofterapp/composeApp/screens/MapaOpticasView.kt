@@ -39,10 +39,10 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-
-private const val RADIO_BASE_KM = 5.0
 import com.example.eyesofterapp.domain.model.Coordenadas
 import com.example.eyesofterapp.domain.model.Optica
+
+private const val RADIO_BASE_KM = 5.0
 
 @Composable
 fun MapaOpticasView(

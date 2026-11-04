@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +36,11 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+
+private const val RADIO_BASE_KM = 5.0
 import com.example.eyesofterapp.domain.model.Coordenadas
 import com.example.eyesofterapp.domain.model.Optica
 
@@ -110,15 +116,22 @@ fun MapaOpticasView(
             }
         }
 
-        // Marcadores de ópticas proyectados
-        Box(modifier = Modifier.fillMaxSize()) {
-            opticas.forEachIndexed { index, optica ->
-                val baseOffsetX = (0.2f + (index * 0.15f) % 0.65f)
-                val baseOffsetY = (0.25f + ((index * 0.22f) + 0.1f) % 0.55f)
+        // Marcadores de ópticas proyectados según sus coordenadas reales,
+        // relativos a la ubicación del usuario (norte arriba). Radio visible: 5 km a zoom 1.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val referencia = userCoords
+                ?: opticas.firstOrNull()?.let { Coordenadas(it.lat, it.lng) }
+            val radioKm = RADIO_BASE_KM / zoomLevel
+            val kmPorGradoLng = 111.32 * cos(referencia?.lat?.let { it * PI / 180.0 } ?: 0.0)
 
-                // Ajuste de offset según el zoomLevel
-                val offsetX = (0.5f + (baseOffsetX - 0.5f) * zoomLevel).coerceIn(0.05f, 0.85f)
-                val offsetY = (0.5f + (baseOffsetY - 0.5f) * zoomLevel).coerceIn(0.05f, 0.80f)
+            if (referencia != null) opticas.forEach { optica ->
+                val dxKm = (optica.lng - referencia.lng) * kmPorGradoLng
+                val dyKm = (optica.lat - referencia.lat) * 110.57
+                // Las que quedan fuera del radio visible no se dibujan (usa ➖ para alejar).
+                if (abs(dxKm) > radioKm || abs(dyKm) > radioKm) return@forEach
+
+                val offsetX = (0.5 + dxKm / (2 * radioKm)).toFloat()
+                val offsetY = (0.5 - dyKm / (2 * radioKm)).toFloat()
 
                 val isSelected = opticaSeleccionada?.id == optica.id
                 val esVerificada = optica.verificada
@@ -127,8 +140,8 @@ fun MapaOpticasView(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(
-                            start = (offsetX * 300).dp,
-                            top = (offsetY * 260).dp
+                            start = (maxWidth * offsetX - 6.dp).coerceIn(0.dp, (maxWidth - 40.dp).coerceAtLeast(0.dp)),
+                            top = (maxHeight * offsetY - 30.dp).coerceIn(0.dp, (maxHeight - 40.dp).coerceAtLeast(0.dp))
                         )
                         .clickable { onSeleccionarOptica(optica) }
                 ) {
@@ -226,7 +239,7 @@ fun MapaOpticasView(
             }
             // Zoom Out
             Card(
-                modifier = Modifier.clickable { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.6f) },
+                modifier = Modifier.clickable { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.1f) },
                 shape = CircleShape,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)

@@ -50,6 +50,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.example.eyesofterapp.location.AndroidLocationProvider
+import com.example.eyesofterapp.location.ResultadoUbicacion
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -62,6 +64,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.MapLibreMap
 
 private const val TAG = "GPS_DEBUG"
+private const val ZOOM_MINIMO_OPTICAS = 11.0
 
 @Composable
 fun PantallaMapa() {
@@ -83,6 +86,7 @@ fun PantallaMapa() {
     var ubicacion by remember { mutableStateOf<LatLng?>(null) }
 
     val activity = remember(context) { findActivity(context) }
+    val scope = rememberCoroutineScope()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -102,9 +106,7 @@ fun PantallaMapa() {
         }
 
         if (granted && gpsActivo) {
-            obtenerUbicacionActual(context) { latLng ->
-                ubicacion = latLng
-            }
+            scope.launch { ubicacion = obtenerUbicacionActual(context) }
         }
     }
 
@@ -115,9 +117,7 @@ fun PantallaMapa() {
                 gpsActivo = esGpsActivo(context)
                 Log.d(TAG, "ON_RESUME - Permiso: $permisoConcedido, GPS: $gpsActivo")
                 if (permisoConcedido && gpsActivo && ubicacion == null) {
-                    obtenerUbicacionActual(context) { latLng ->
-                        ubicacion = latLng
-                    }
+                    scope.launch { ubicacion = obtenerUbicacionActual(context) }
                 }
             }
         }
@@ -134,9 +134,7 @@ fun PantallaMapa() {
                 )
             )
         } else if (gpsActivo) {
-            obtenerUbicacionActual(context) { latLng ->
-                ubicacion = latLng
-            }
+            scope.launch { ubicacion = obtenerUbicacionActual(context) }
         }
     }
 
@@ -194,7 +192,8 @@ fun MapLibreView(initialLocation: LatLng?) {
     val scope = rememberCoroutineScope()
 
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
-    val mapView = remember(context) { MapView(context) }
+    // MapLibre exige llamar onCreate() antes de usar el MapView.
+    val mapView = remember(context) { MapView(context).apply { onCreate(null) } }
 
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
@@ -204,7 +203,6 @@ fun MapLibreView(initialLocation: LatLng?) {
                     Lifecycle.Event.ON_RESUME -> mapView.onResume()
                     Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                     Lifecycle.Event.ON_STOP -> mapView.onStop()
-                    Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
                     else -> {}
                 }
             } catch (e: Exception) {
@@ -222,8 +220,24 @@ fun MapLibreView(initialLocation: LatLng?) {
         }
     }
 
+    // La ubicación suele llegar DESPUÉS de que el mapa se creó: centramos la cámara cuando llegue.
+    LaunchedEffect(initialLocation, mapLibreMap) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        val destino = initialLocation ?: return@LaunchedEffect
+        map.animateCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder().target(destino).zoom(15.0).tilt(45.0).build()
+            )
+        )
+    }
+
     LaunchedEffect(mapView) {
         mapView.getMapAsync { map ->
+            // Mientras llega el GPS, mostramos México en lugar del punto (0,0) en el océano.
+            map.cameraPosition = CameraPosition.Builder()
+                .target(LatLng(20.0825, -98.3622))
+                .zoom(5.0)
+                .build()
             mapLibreMap = map
             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                 if (tienePermiso(context)) {
@@ -257,6 +271,8 @@ fun MapLibreView(initialLocation: LatLng?) {
 
             map.addOnCameraIdleListener {
                 try {
+                    // A zoom bajo el área es enorme y Overpass rechaza o tarda la consulta.
+                    if (map.cameraPosition.zoom < ZOOM_MINIMO_OPTICAS) return@addOnCameraIdleListener
                     val bounds = map.projection.visibleRegion.latLngBounds
                     scope.launch {
                         cargarOpticas(bounds, map)
@@ -294,7 +310,8 @@ fun MapLibreView(initialLocation: LatLng?) {
                             )
                         )
                     } else {
-                        obtenerUbicacionActual(context) { latLng ->
+                        scope.launch {
+                            val latLng = obtenerUbicacionActual(context)
                             if (latLng != null) {
                                 mapLibreMap?.animateCamera(
                                     CameraUpdateFactory.newCameraPosition(
@@ -341,70 +358,15 @@ private fun findActivity(context: Context): ComponentActivity? {
     return null
 }
 
-@SuppressLint("MissingPermission")
-private fun obtenerUbicacionActual(context: Context, onResult: (LatLng?) -> Unit) {
-    val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
-    if (!fineGranted && !coarseGranted) {
-        onResult(null)
-        return
-    }
-
-    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    if (!esGpsActivo(context)) {
-        onResult(null)
-        return
-    }
-
-    try {
-        val provider = if (fineGranted && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            LocationManager.GPS_PROVIDER
-        } else {
-            LocationManager.NETWORK_PROVIDER
+/** Usa el mismo proveedor robusto que la pantalla de ópticas (gps + network + fused, con timeout). */
+private suspend fun obtenerUbicacionActual(context: Context): LatLng? =
+    when (val r = AndroidLocationProvider(context).obtenerUbicacion()) {
+        is ResultadoUbicacion.Exito -> LatLng(r.coordenadas.lat, r.coordenadas.lng)
+        else -> {
+            Log.w(TAG, "No se pudo obtener ubicación: $r")
+            null
         }
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            locationManager.getCurrentLocation(
-                provider,
-                null,
-                context.mainExecutor
-            ) { location ->
-                if (location != null) {
-                    onResult(LatLng(location.latitude, location.longitude))
-                } else {
-                    val lastKnown = try {
-                        locationManager.getLastKnownLocation(provider)
-                    } catch (e: SecurityException) {
-                        null
-                    }
-                    if (lastKnown != null) {
-                        onResult(LatLng(lastKnown.latitude, lastKnown.longitude))
-                    } else {
-                        onResult(null)
-                    }
-                }
-            }
-        } else {
-            val lastKnown = try {
-                locationManager.getLastKnownLocation(provider)
-            } catch (e: SecurityException) {
-                null
-            }
-            if (lastKnown != null) {
-                onResult(LatLng(lastKnown.latitude, lastKnown.longitude))
-            } else {
-                onResult(null)
-            }
-        }
-    } catch (e: SecurityException) {
-        Log.e(TAG, "SecurityException al obtener ubicación: ${e.message}")
-        onResult(null)
-    } catch (e: Exception) {
-        Log.e(TAG, "Error general al obtener ubicación: ${e.message}")
-        onResult(null)
     }
-}
 
 private suspend fun cargarOpticas(bounds: LatLngBounds, map: MapLibreMap) {
     val query = """

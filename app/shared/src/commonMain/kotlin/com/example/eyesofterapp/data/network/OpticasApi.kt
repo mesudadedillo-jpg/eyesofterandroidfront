@@ -9,7 +9,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
-import kotlin.math.acos
+import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -131,7 +131,8 @@ class OpticasApi(private val client: HttpClient) {
         val a = sin(dLat / 2) * sin(dLat / 2) +
                 cos(radLat1) * cos(radLat2) *
                 sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * acos(min(1.0, sqrt(a)))
+        // Haversine usa asin (con acos todas las distancias salían ~20,000 km).
+        val c = 2 * asin(min(1.0, sqrt(a)))
         return r * c
     }
 }

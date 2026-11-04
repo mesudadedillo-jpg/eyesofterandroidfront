@@ -170,3 +170,5 @@ catálogo local de respaldo con 8 ópticas.
 - `PantallaMapa.kt` usa `LocalLifecycleOwner` de un paquete obsoleto (advertencia de compilación).
 - `applicationId` es `com.example.eyesofterapp`; Google Play no acepta `com.example`.
 - iOS no se ha compilado desde la separación (requiere Mac).
+
+Verificación de subida mediante conexión SSH (2026-11-04 09:14)

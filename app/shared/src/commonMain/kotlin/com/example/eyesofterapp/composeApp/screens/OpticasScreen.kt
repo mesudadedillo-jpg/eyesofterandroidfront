@@ -152,9 +152,9 @@ fun OpticasScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (state.esUbicacionSimulada)
-                                    "🎯 GPS Simulado (Demostración Real): ${coords.lat}, ${coords.lng}"
+                                    "🎯 GPS simulado: ${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}"
                                 else
-                                    "📡 Sensor GPS Real Activo: ${coords.lat}, ${coords.lng}",
+                                    "📡 GPS real: ${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.onTertiaryContainer
@@ -162,9 +162,12 @@ fun OpticasScreen(
                             )
                             Text(
                                 text = if (state.esUbicacionSimulada)
-                                    "Ubicación demostrativa real (Tulancingo, Hgo) para prueba del sensor."
-                                else
-                                    "Coordenadas obtenidas directamente del sensor de posicionamiento.",
+                                    "Ubicación de demostración (Tulancingo, Hgo). NO viene del sensor."
+                                else buildString {
+                                    append(if (state.esUltimaConocida) "Última posición conocida" else "Lectura del sensor")
+                                    state.proveedorGps?.let { append(" ($it)") }
+                                    state.precisionMetros?.let { append(" · precisión ±${it.toInt()} m") }
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.onTertiaryContainer
                                        else MaterialTheme.colorScheme.onSecondaryContainer
@@ -380,6 +383,9 @@ fun OpticasScreen(
         }
     }
 }
+
+private fun formatoCoord(valor: Double): String =
+    ((valor * 100_000).toLong() / 100_000.0).toString()
 
 @Composable
 fun OpticaCard(optica: Optica, onClick: (() -> Unit)? = null) {

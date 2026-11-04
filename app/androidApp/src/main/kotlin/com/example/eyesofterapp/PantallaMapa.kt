@@ -33,7 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
@@ -212,7 +212,18 @@ fun MapLibreView(initialLocation: LatLng?) {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            // Al cerrar el mapa: primero se apaga el punto de ubicación (sus animaciones
+            // de brújula seguían corriendo y tronaban al leer un estilo ya destruido:
+            // "Calling getSourceAs when a newer style is loading"), y luego se detiene
+            // el MapView en el mismo orden que Android: pausa → alto → destrucción.
             try {
+                mapLibreMap?.locationComponent?.let { if (it.isLocationComponentActivated) it.isLocationComponentEnabled = false }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error apagando LocationComponent: ${e.message}")
+            }
+            try {
+                mapView.onPause()
+                mapView.onStop()
                 mapView.onDestroy()
             } catch (e: Exception) {
                 Log.e(TAG, "Error destruyendo MapView: ${e.message}")
@@ -445,13 +456,17 @@ private suspend fun cargarOpticas(bounds: LatLngBounds, map: MapLibreMap) {
                     val circleLayer = org.maplibre.android.style.layers.CircleLayer("opticas-layer", "opticas-source")
                         .withProperties(
                             org.maplibre.android.style.layers.PropertyFactory.circleRadius(8f),
+                            // Mismos colores que las píldoras de la app: verde = asociada,
+                            // gris azulado = externa. El borde blanco los separa del mapa.
                             org.maplibre.android.style.layers.PropertyFactory.circleColor(
                                 org.maplibre.android.style.expressions.Expression.switchCase(
                                     org.maplibre.android.style.expressions.Expression.eq(org.maplibre.android.style.expressions.Expression.get("isPartner"), org.maplibre.android.style.expressions.Expression.literal(true)),
-                                    org.maplibre.android.style.expressions.Expression.literal("#0000FF"),
-                                    org.maplibre.android.style.expressions.Expression.literal("#FF0000")
+                                    org.maplibre.android.style.expressions.Expression.literal("#1D7A3A"),
+                                    org.maplibre.android.style.expressions.Expression.literal("#8FA3C4")
                                 )
-                            )
+                            ),
+                            org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor("#FFFFFF"),
+                            org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(2f)
                         )
                     style.addLayer(circleLayer)
                 } else {

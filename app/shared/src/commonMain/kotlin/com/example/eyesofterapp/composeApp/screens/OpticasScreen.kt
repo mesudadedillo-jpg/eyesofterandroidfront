@@ -1,5 +1,10 @@
 package com.example.eyesofterapp.composeApp.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -26,9 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -36,10 +39,10 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.example.eyesofterapp.domain.model.FUENTE_OSM
 import com.example.eyesofterapp.domain.model.Optica
 import com.example.eyesofterapp.ui.OpticasUiState
+import kotlin.math.roundToLong
 
 /** Altura mínima recomendada para que un botón sea fácil de tocar (Material / WCAG). */
 private val ALTO_TOQUE = 48.dp
@@ -74,7 +78,8 @@ fun OpticasScreen(
     onSimularUbicacion: () -> Unit = {},
     onBuscarPorCiudad: (String) -> Unit,
     onActualizarBusquedaTexto: (String) -> Unit,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onAbrirMapaEnVivo: (() -> Unit)? = null
 ) {
     // La lista es la vista inicial: es la más cómoda en teléfono y con lector de pantalla.
     var vistaMapa by rememberSaveable { mutableStateOf(false) }
@@ -140,7 +145,6 @@ fun OpticasScreen(
                         onSimular = onSimularUbicacion
                     )
                 }
-            }
 
             if (!state.cargando) {
                 item(key = "resumen") { Resumen(opticasFiltradas.size, state) }
@@ -507,6 +511,7 @@ fun OpticaCard(
             if (optica.horario.isNotBlank()) {
                 Text("Horario: ${optica.horario}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
 
             Spacer(Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {

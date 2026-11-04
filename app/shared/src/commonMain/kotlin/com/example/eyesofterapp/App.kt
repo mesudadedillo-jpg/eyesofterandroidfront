@@ -10,8 +10,12 @@ import com.example.eyesofterapp.composeApp.theme.EyeSofterTheme
 import com.example.eyesofterapp.location.LocationProvider
 import com.example.eyesofterapp.ui.AuthViewModel
 
+/**
+ * @param onAbrirMapaEnVivo acción para abrir el mapa real (MapLibre). Solo Android
+ * lo tiene; en escritorio, web e iOS queda en null y el botón no aparece.
+ */
 @Composable
-fun App(locationProvider: LocationProvider? = null) {
+fun App(locationProvider: LocationProvider? = null, onAbrirMapaEnVivo: (() -> Unit)? = null) {
     EyeSofterTheme {
         val container = remember(locationProvider) { AppContainer(locationProvider) }
 
@@ -22,7 +26,8 @@ fun App(locationProvider: LocationProvider? = null) {
             container = container,
             state = state,
             onLogin = authViewModel::login,
-            onLogout = authViewModel::logout
+            onLogout = authViewModel::logout,
+            onAbrirMapaEnVivo = onAbrirMapaEnVivo
         )
     }
 }

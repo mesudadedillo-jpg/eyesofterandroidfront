@@ -480,13 +480,17 @@ private suspend fun cargarOpticas(bounds: LatLngBounds, map: MapLibreMap) {
                     val circleLayer = org.maplibre.android.style.layers.CircleLayer("opticas-layer", "opticas-source")
                         .withProperties(
                             org.maplibre.android.style.layers.PropertyFactory.circleRadius(8f),
+                            // Mismos colores que las píldoras de la app: verde = asociada,
+                            // gris azulado = externa. El borde blanco los separa del mapa.
                             org.maplibre.android.style.layers.PropertyFactory.circleColor(
                                 org.maplibre.android.style.expressions.Expression.switchCase(
                                     org.maplibre.android.style.expressions.Expression.eq(org.maplibre.android.style.expressions.Expression.get("isPartner"), org.maplibre.android.style.expressions.Expression.literal(true)),
-                                    org.maplibre.android.style.expressions.Expression.literal("#0000FF"),
-                                    org.maplibre.android.style.expressions.Expression.literal("#FF0000")
+                                    org.maplibre.android.style.expressions.Expression.literal("#1D7A3A"),
+                                    org.maplibre.android.style.expressions.Expression.literal("#8FA3C4")
                                 )
-                            )
+                            ),
+                            org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor("#FFFFFF"),
+                            org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(2f)
                         )
                     style.addLayer(circleLayer)
                 } else {

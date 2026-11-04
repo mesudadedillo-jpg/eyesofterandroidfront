@@ -1,6 +1,12 @@
 package com.example.eyesofterapp.composeApp.navigation
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import com.example.eyesofterapp.composeApp.theme.EyesMotion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -32,7 +38,18 @@ fun AppNavHost(
     val opticasViewModel = remember(container) { container.crearOpticasViewModel() }
     val opticasState by opticasViewModel.state.collectAsState()
 
-    Crossfade(targetState = currentScreen, label = "navegacion") { current ->
+    // Cambio de pantalla: la nueva entra con fundido y sube un poco (1/24 de su
+    // altura) con ease-out en 220 ms; la anterior se desvanece más rápido (150 ms).
+    // Así se nota que cambió la pantalla, sin que el cambio estorbe.
+    AnimatedContent(
+        targetState = currentScreen,
+        transitionSpec = {
+            (fadeIn(tween(EyesMotion.Pantalla, easing = EyesMotion.EaseOut)) +
+                slideInVertically(tween(EyesMotion.Pantalla, easing = EyesMotion.EaseOut)) { it / 24 })
+                .togetherWith(fadeOut(tween(EyesMotion.Salida)))
+        },
+        label = "navegacion"
+    ) { current ->
         when (current) {
             Screen.Login -> LoginScreen(state, onLogin)
             is Screen.Admin -> AdminScreen(current.user, onLogout = onLogout, onVerOpticas = { currentScreen = Screen.Opticas(current.user) })

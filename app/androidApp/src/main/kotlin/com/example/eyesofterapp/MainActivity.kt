@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.eyesofterapp.composeApp.theme.EyeSofterTheme
+import com.example.eyesofterapp.composeApp.theme.EyesColors
+import com.example.eyesofterapp.composeApp.theme.EyesShapes
 import com.example.eyesofterapp.location.AndroidLocationProvider
 
 class MainActivity : ComponentActivity() {
@@ -56,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 }
                 startActivity(intent)
             } else {
-                Toast.makeText(this, "❌ Permiso GPS Denegado", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Permiso de ubicación denegado", Toast.LENGTH_SHORT).show()
             }
             onPermissionResultCallback?.invoke(false)
             onPermissionResultCallback = null
@@ -70,11 +76,11 @@ class MainActivity : ComponentActivity() {
             val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 
             if (!isGpsEnabled && !isNetworkEnabled) {
-                Toast.makeText(this, "📍 GPS apagado. Por favor actívalo.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "La ubicación está apagada. Actívala para continuar.", Toast.LENGTH_LONG).show()
                 startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                 onPermissionResultCallback?.invoke(false)
             } else {
-                Toast.makeText(this, "📍 Sensor GPS autorizado y activo", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Ubicación activada", Toast.LENGTH_SHORT).show()
                 onPermissionResultCallback?.invoke(true)
             }
         } else {
@@ -107,7 +113,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        // SystemBarStyle.dark: íconos BLANCOS en la barra de estado, porque arriba
+        // de cada pantalla va el marino con las bandas de EYESOFTER.
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
 
         setContent {
@@ -120,20 +128,34 @@ class MainActivity : ComponentActivity() {
             
             var showMap by remember { mutableStateOf(false) }
 
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (showMap) {
-                    PantallaMapa()
-                } else {
-                    App(locationProvider = locationProvider)
-                }
+            // El tema envuelve TODO, para que la pantalla de MapLibre también use
+            // la paleta y la tipografía de EYESOFTER (antes quedaba con el estilo por defecto).
+            EyeSofterTheme {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (showMap) {
+                        PantallaMapa()
+                    } else {
+                        App(locationProvider = locationProvider)
+                    }
 
-                FloatingActionButton(
-                    onClick = { showMap = !showMap },
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(16.dp, 16.dp, 16.dp, 100.dp)
-                ) {
-                    Text(if (showMap) "App" else "Mapa")
+                    // Botón flotante para cambiar entre la app y el mapa MapLibre:
+                    // píldora marino, plana (sin sombra), como las del resto de la app.
+                    FloatingActionButton(
+                        onClick = { showMap = !showMap },
+                        shape = EyesShapes.Pildora,
+                        containerColor = EyesColors.Marino,
+                        contentColor = EyesColors.Blanco,
+                        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(16.dp, 16.dp, 16.dp, 100.dp)
+                    ) {
+                        Text(
+                            if (showMap) "Volver a la app" else "Mapa en vivo",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
                 }
             }
         }

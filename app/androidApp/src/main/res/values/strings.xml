@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Eyesofterapp</string>
+    <!-- Nombre que aparece debajo del ícono en el teléfono -->
+    <string name="app_name">EYESOFTER</string>
 </resources>

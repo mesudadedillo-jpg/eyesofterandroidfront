@@ -60,6 +60,8 @@ class OpticasViewModel(
                         precisionMetros = null,
                         proveedorGps = null,
                         esUltimaConocida = false,
+                        lugarBuscado = null,
+                        radioBusquedaKm = opticasApi.ultimoRadioKm,
                         opticas = opticasData,
                         error = mensaje
                     )
@@ -85,6 +87,8 @@ class OpticasViewModel(
                         it.copy(
                             cargando = false,
                             opticas = resultado.data,
+                            lugarBuscado = null,
+                            radioBusquedaKm = opticasApi.ultimoRadioKm,
                             mostrandoCache = false,
                             error = null
                         )
@@ -119,6 +123,8 @@ class OpticasViewModel(
                             precisionMetros = null,
                             proveedorGps = null,
                             esUltimaConocida = false,
+                            lugarBuscado = null,
+                            radioBusquedaKm = opticasApi.ultimoRadioKm,
                             mostrandoCache = false,
                             sinPermisoUbicacion = false,
                             error = null
@@ -133,8 +139,8 @@ class OpticasViewModel(
     }
 
     fun buscarPorCiudadOZip(query: String) {
-        val busqueda = query.ifBlank { _state.value.busquedaTexto }
-        if (busqueda.isBlank()) return
+        val busqueda = query.ifBlank { _state.value.busquedaTexto }.trim()
+        if (busqueda.isBlank() || _state.value.cargando) return
 
         viewModelScope.launch {
             _state.update {
@@ -146,6 +152,31 @@ class OpticasViewModel(
                 )
             }
 
+            // 1) Texto -> coordenadas (funciona con cualquier ciudad o C.P. del mundo).
+            val lugar = opticasApi.geocodificar(busqueda)
+            if (lugar != null) {
+                when (val resultado = opticasApi.getOpticasCercanas(lugar.coordenadas.lat, lugar.coordenadas.lng)) {
+                    is ResultadoRed.Exito -> _state.update {
+                        it.copy(
+                            cargando = false,
+                            opticas = resultado.data,
+                            coordenadasGps = lugar.coordenadas,
+                            esUbicacionSimulada = false,
+                            precisionMetros = null,
+                            proveedorGps = null,
+                            esUltimaConocida = false,
+                            lugarBuscado = lugar.nombre,
+                            radioBusquedaKm = opticasApi.ultimoRadioKm,
+                            mostrandoCache = false,
+                            error = null
+                        )
+                    }
+                    else -> procesarErrorRed(resultado)
+                }
+                return@launch
+            }
+
+            // 2) No se encontró el lugar (o no hay internet): búsqueda por texto en el servidor/catálogo.
             when (val resultado = opticasApi.getOpticasPorCiudadOZip(busqueda)) {
                 is ResultadoRed.Exito -> {
                     _state.update {
@@ -153,9 +184,11 @@ class OpticasViewModel(
                             cargando = false,
                             opticas = resultado.data,
                             coordenadasGps = null,
+                            lugarBuscado = null,
+                            radioBusquedaKm = null,
                             mostrandoCache = false,
                             sinPermisoUbicacion = false,
-                            error = null
+                            error = "No encontramos \"$busqueda\" en el mapa. Mostrando coincidencias del catálogo EYESOFTER."
                         )
                     }
                 }

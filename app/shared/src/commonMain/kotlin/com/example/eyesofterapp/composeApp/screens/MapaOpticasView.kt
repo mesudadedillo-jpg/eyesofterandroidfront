@@ -2,25 +2,22 @@ package com.example.eyesofterapp.composeApp.screens
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,21 +26,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.eyesofterapp.data.network.distanciaKm
+import com.example.eyesofterapp.domain.model.Coordenadas
+import com.example.eyesofterapp.domain.model.Optica
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
-import com.example.eyesofterapp.domain.model.Coordenadas
-import com.example.eyesofterapp.domain.model.Optica
 
+/** A zoom 1 el mapa muestra ±5 km alrededor del centro. */
 private const val RADIO_BASE_KM = 5.0
+private const val ZOOM_MIN = 0.1f   // ±50 km
+private const val ZOOM_MAX = 10f    // ±500 m
+/** Más marcadores que esto vuelven el mapa ilegible en un teléfono. */
+private const val MAX_MARCADORES = 40
 
+private val COLOR_ASOCIADA = Color(0xFF1B7A3A)
+private val COLOR_OTRA = Color(0xFF6B7280)
+
+/**
+ * Mapa esquemático (sin mosaicos) que funciona en todas las plataformas.
+ * Coloca cada óptica según su latitud/longitud respecto al centro (norte arriba).
+ * El mapa real con calles está en Android: botón «Mapa» → PantallaMapa (MapLibre).
+ */
 @Composable
 fun MapaOpticasView(
     userCoords: Coordenadas?,
@@ -52,166 +66,134 @@ fun MapaOpticasView(
     opticaSeleccionada: Optica?,
     onSeleccionarOptica: (Optica) -> Unit,
     onCentrarUbicacion: () -> Unit,
-    onSimularUbicacion: (() -> Unit)? = null
+    onSimularUbicacion: (() -> Unit)? = null,
+    etiquetaCentro: String = if (esUbicacionSimulada) "Demostración" else "Tú estás aquí"
 ) {
-    val uriHandler = LocalUriHandler.current
-    var zoomLevel by remember { mutableStateOf(1f) }
+    val referencia = userCoords ?: opticas.firstOrNull()?.let { Coordenadas(it.lat, it.lng) }
+    val zoomInicial = remember(referencia, opticas) { calcularZoomInicial(referencia, opticas) }
+    var zoomLevel by remember(zoomInicial) { mutableStateOf(zoomInicial) }
     var mapaExpandido by remember { mutableStateOf(false) }
+    val visibles = remember(opticas) { opticas.sortedBy { it.distanciaKm }.take(MAX_MARCADORES) }
+    val radioKm = RADIO_BASE_KM / zoomLevel
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (mapaExpandido) 520.dp else 380.dp)
-            .background(Color(0xFFE8F1F5), RoundedCornerShape(16.dp))
-    ) {
-        // Fondo interactivo de mapa con cuadrícula y calles escaladas por Zoom
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val canvasWidth = size.width
-            val canvasHeight = size.height
-
-            // Fondo del mapa
-            drawRect(color = Color(0xFFE2ECE9))
-
-            // Líneas de cuadrícula ajustadas según zoomLevel
-            val strokeWidth = 6f * zoomLevel
-            val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(15f * zoomLevel, 15f * zoomLevel), 0f)
-
-            // Calles principales
-            val stepX = (canvasWidth / 5f) * zoomLevel
-            val stepY = (canvasHeight / 5f) * zoomLevel
-
-            var y = 0f
-            while (y < canvasHeight) {
-                drawLine(
-                    color = Color.White,
-                    start = Offset(0f, y),
-                    end = Offset(canvasWidth, y),
-                    strokeWidth = strokeWidth * 2
-                )
-                y += stepY.coerceAtLeast(40f)
-            }
-
-            var x = 0f
-            while (x < canvasWidth) {
-                drawLine(
-                    color = Color.White,
-                    start = Offset(x, 0f),
-                    end = Offset(x, canvasHeight),
-                    strokeWidth = strokeWidth * 2
-                )
-                x += stepX.coerceAtLeast(40f)
-            }
-
-            // Calles secundarias discontinuas
-            var secY = 0f
-            while (secY < canvasHeight) {
-                drawLine(
-                    color = Color(0xFFCDE0D8),
-                    start = Offset(0f, secY),
-                    end = Offset(canvasWidth, secY),
-                    strokeWidth = strokeWidth,
-                    pathEffect = dashPathEffect
-                )
-                secY += (stepY / 2f).coerceAtLeast(20f)
-            }
-        }
-
-        // Marcadores de ópticas proyectados según sus coordenadas reales,
-        // relativos a la ubicación del usuario (norte arriba). Radio visible: 5 km a zoom 1.
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val referencia = userCoords
-                ?: opticas.firstOrNull()?.let { Coordenadas(it.lat, it.lng) }
-            val radioKm = RADIO_BASE_KM / zoomLevel
-            val kmPorGradoLng = 111.32 * cos(referencia?.lat?.let { it * PI / 180.0 } ?: 0.0)
-
-            if (referencia != null) opticas.forEach { optica ->
-                val dxKm = (optica.lng - referencia.lng) * kmPorGradoLng
-                val dyKm = (optica.lat - referencia.lat) * 110.57
-                // Las que quedan fuera del radio visible no se dibujan (usa ➖ para alejar).
-                if (abs(dxKm) > radioKm || abs(dyKm) > radioKm) return@forEach
-
-                val offsetX = (0.5 + dxKm / (2 * radioKm)).toFloat()
-                val offsetY = (0.5 - dyKm / (2 * radioKm)).toFloat()
-
-                val isSelected = opticaSeleccionada?.id == optica.id
-                val esVerificada = optica.verificada
-
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(
-                            start = (maxWidth * offsetX - 6.dp).coerceIn(0.dp, (maxWidth - 40.dp).coerceAtLeast(0.dp)),
-                            top = (maxHeight * offsetY - 30.dp).coerceIn(0.dp, (maxHeight - 40.dp).coerceAtLeast(0.dp))
-                        )
-                        .clickable { onSeleccionarOptica(optica) }
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = when {
-                                    isSelected -> MaterialTheme.colorScheme.primary
-                                    esVerificada -> Color(0xFF2E7D32)
-                                    else -> Color(0xFFE0E0E0)
-                                }
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp)
-                        ) {
-                            Text(
-                                text = if (esVerificada) "✅ ${optica.nombre}" else "⚪ ${optica.nombre}",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = if (esVerificada) FontWeight.Bold else FontWeight.Normal,
-                                color = when {
-                                    isSelected || esVerificada -> Color.White
-                                    else -> Color(0xFF424242)
-                                },
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(12.dp)
-                                .background(
-                                    when {
-                                        isSelected -> MaterialTheme.colorScheme.primary
-                                        esVerificada -> Color(0xFF2E7D32)
-                                        else -> Color(0xFF9E9E9E)
-                                    },
-                                    CircleShape
-                                )
-                        )
-                    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (mapaExpandido) 520.dp else 380.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFFE2ECE9))
+                .semantics {
+                    contentDescription = "Mapa esquemático con ${visibles.size} ópticas alrededor del centro. " +
+                        "Con lector de pantalla es más cómoda la vista Lista."
+                }
+        ) {
+            // Fondo: cuadrícula tipo calles que se ajusta al zoom
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val grosor = (6f * zoomLevel).coerceIn(2f, 14f)
+                val paso = (size.width / 5f * zoomLevel).coerceIn(40f, size.width)
+                val discontinua = PathEffect.dashPathEffect(floatArrayOf(grosor * 2, grosor * 2), 0f)
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(Color.White, Offset(0f, y), Offset(size.width, y), strokeWidth = grosor * 2)
+                    drawLine(Color(0xFFCDE0D8), Offset(0f, y + paso / 2), Offset(size.width, y + paso / 2), strokeWidth = grosor, pathEffect = discontinua)
+                    y += paso
+                }
+                var x = 0f
+                while (x < size.width) {
+                    drawLine(Color.White, Offset(x, 0f), Offset(x, size.height), strokeWidth = grosor * 2)
+                    x += paso
                 }
             }
 
-            // Marcador GPS del Usuario (📍)
-            if (userCoords != null) {
-                Box(
-                    modifier = Modifier.align(Alignment.Center)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                if (referencia != null) {
+                    val kmPorGradoLng = 111.32 * cos(referencia.lat * PI / 180.0)
+                    // La seleccionada se dibuja al final para que quede encima.
+                    val orden = visibles.sortedBy { it.id == opticaSeleccionada?.id }
+                    orden.forEach { optica ->
+                        val dxKm = (optica.lng - referencia.lng) * kmPorGradoLng
+                        val dyKm = (optica.lat - referencia.lat) * 110.57
+                        if (abs(dxKm) > radioKm || abs(dyKm) > radioKm) return@forEach
+
+                        val fx = (0.5 + dxKm / (2 * radioKm)).toFloat()
+                        val fy = (0.5 - dyKm / (2 * radioKm)).toFloat()
+                        val seleccionada = opticaSeleccionada?.id == optica.id
+                        // Solo la seleccionada y las asociadas llevan nombre: así no se enciman.
+                        val conEtiqueta = seleccionada || optica.verificada
+                        val ajusteY = if (conEtiqueta) 36.dp else 16.dp
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(
+                                    start = (maxWidth * fx - 16.dp).coerceIn(0.dp, (maxWidth - 48.dp).coerceAtLeast(0.dp)),
+                                    top = (maxHeight * fy - ajusteY).coerceIn(0.dp, (maxHeight - 48.dp).coerceAtLeast(0.dp))
+                                )
+                                .clickable(onClickLabel = "ver detalles", role = Role.Button) { onSeleccionarOptica(optica) }
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = "${optica.nombre}, a ${distanciaHablada(optica.distanciaKm)}" +
+                                        if (optica.verificada) ", asociada EYESOFTER" else ""
+                                }
+                                .padding(8.dp)
+                        ) {
+                            if (conEtiqueta) {
+                                Surface(
+                                    color = if (seleccionada) MaterialTheme.colorScheme.primary else COLOR_ASOCIADA,
+                                    shape = RoundedCornerShape(6.dp),
+                                    shadowElevation = if (seleccionada) 6.dp else 2.dp
+                                ) {
+                                    Text(
+                                        text = optica.nombre,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 140.dp).padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(if (seleccionada) 18.dp else 14.dp)
+                                    .background(
+                                        when {
+                                            seleccionada -> MaterialTheme.colorScheme.primary
+                                            optica.verificada -> COLOR_ASOCIADA
+                                            else -> COLOR_OTRA
+                                        },
+                                        CircleShape
+                                    )
+                                    .border(2.dp, Color.White, CircleShape)
+                            )
+                        }
+                    }
+                }
+
+                // Centro: el usuario (GPS), el lugar buscado o la demostración
+                if (userCoords != null) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.align(Alignment.Center).semantics(mergeDescendants = true) {
+                            contentDescription = etiquetaCentro
+                        }
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(28.dp)
-                                .background(
-                                    if (esUbicacionSimulada) Color(0xFFF57C00) else Color(0xFFE53935),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("📍", fontSize = 16.sp)
-                        }
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (esUbicacionSimulada) Color(0xFFF57C00) else Color(0xFFE53935)
-                            ),
+                                .size(22.dp)
+                                .background(if (esUbicacionSimulada) Color(0xFFB45309) else Color(0xFFC62828), CircleShape)
+                                .border(3.dp, Color.White, CircleShape)
+                        )
+                        Surface(
+                            color = if (esUbicacionSimulada) Color(0xFFB45309) else Color(0xFFC62828),
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                text = if (esUbicacionSimulada) "Tú estás aquí (GPS Simulado)" else "Tú estás aquí (GPS Real)",
+                                text = etiquetaCentro,
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall,
-                                fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -219,150 +201,55 @@ fun MapaOpticasView(
                     }
                 }
             }
-        }
 
-        // Controles interactivos del Mapa (Zoom / Tamaño / Recenter)
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Zoom In
-            Card(
-                modifier = Modifier.clickable { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.5f) },
-                shape = CircleShape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            // Controles (48 dp, con descripción para TalkBack)
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("➕", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-            // Zoom Out
-            Card(
-                modifier = Modifier.clickable { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.1f) },
-                shape = CircleShape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Text("➖", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-            // Expandir/Agrandar o achicar el Mapa
-            Card(
-                modifier = Modifier.clickable { mapaExpandido = !mapaExpandido },
-                shape = CircleShape,
-                colors = CardDefaults.cardColors(
-                    containerColor = if (mapaExpandido) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Text("↕️", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-            // Recenter
-            Card(
-                modifier = Modifier.clickable {
-                    zoomLevel = 1f
+                BotonMapa("+", "Acercar") { zoomLevel = (zoomLevel * 1.5f).coerceAtMost(ZOOM_MAX) }
+                BotonMapa("−", "Alejar") { zoomLevel = (zoomLevel / 1.5f).coerceAtLeast(ZOOM_MIN) }
+                BotonMapa(if (mapaExpandido) "▲" else "▼", if (mapaExpandido) "Hacer el mapa más chico" else "Hacer el mapa más grande") {
+                    mapaExpandido = !mapaExpandido
+                }
+                BotonMapa("◎", "Volver a mi ubicación") {
+                    zoomLevel = zoomInicial
                     onCentrarUbicacion()
-                },
-                shape = CircleShape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Text("📍", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-
-        // Tarjeta flotante de la Óptica seleccionada
-        opticaSeleccionada?.let { optica ->
-            Card(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = optica.nombre,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (optica.verificada) Color(0xFFE8F5E9) else Color(0xFFF5F5F5)
-                                ),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = if (optica.verificada) "✅ Asociada / Verificada" else "⚪ Opción Externa (Sin Verificar)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (optica.verificada) Color(0xFF2E7D32) else Color(0xFF616161),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-
-                        if (optica.distanciaKm > 0.0) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                            ) {
-                                Text(
-                                    text = "${((optica.distanciaKm * 10).toInt() / 10.0)} km",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "${optica.direccion}, ${optica.ciudad}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                val mapsUrl = "https://www.google.com/maps/dir/?api=1&destination=${optica.lat},${optica.lng}&destination_place_id=${optica.nombre}"
-                                try {
-                                    uriHandler.openUri(mapsUrl)
-                                } catch (_: Exception) { }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("🧭 Cómo llegar")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                val telUrl = "tel:${optica.telefono}"
-                                try {
-                                    uriHandler.openUri(telUrl)
-                                } catch (_: Exception) { }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("📞 Llamar")
-                        }
-                    }
                 }
             }
         }
+
+        Text(
+            text = "Área mostrada: unos ${formatoDistancia(radioKm * 2)} de lado. Verde = asociada EYESOFTER, gris = otras ópticas.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
+}
+
+@Composable
+private fun BotonMapa(simbolo: String, descripcion: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = descripcion }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(simbolo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Elige el zoom para que quepan las ~8 ópticas más cercanas. */
+private fun calcularZoomInicial(referencia: Coordenadas?, opticas: List<Optica>): Float {
+    if (referencia == null || opticas.isEmpty()) return 1f
+    val lejana = opticas
+        .map { distanciaKm(referencia.lat, referencia.lng, it.lat, it.lng) }
+        .sorted()
+        .take(8)
+        .last()
+        .coerceAtLeast(0.5)
+    return (RADIO_BASE_KM / (lejana * 1.2)).toFloat().coerceIn(ZOOM_MIN, ZOOM_MAX)
 }

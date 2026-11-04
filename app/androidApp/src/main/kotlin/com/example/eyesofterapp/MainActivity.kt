@@ -1,5 +1,8 @@
 package com.example.eyesofterapp
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -127,9 +130,13 @@ class MainActivity : ComponentActivity() {
                     onClick = { showMap = !showMap },
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(16.dp, 16.dp, 16.dp, 100.dp)
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                        .semantics {
+                            contentDescription = if (showMap) "Volver a la app" else "Abrir mapa con calles"
+                        }
                 ) {
-                    Text(if (showMap) "App" else "Mapa")
+                    Text(if (showMap) "Volver" else "Mapa", modifier = Modifier.padding(horizontal = 12.dp))
                 }
             }
         }

@@ -369,16 +369,18 @@ private suspend fun obtenerUbicacionActual(context: Context): LatLng? =
     }
 
 private suspend fun cargarOpticas(bounds: LatLngBounds, map: MapLibreMap) {
+    val zona = "(${bounds.southWest.latitude},${bounds.southWest.longitude},${bounds.northEast.latitude},${bounds.northEast.longitude})"
+    // Misma búsqueda que OsmApi (app/shared): ópticas, optometristas y oftalmólogos.
+    // "out center" da un punto también para edificios (ways/relations).
     val query = """
         [out:json][timeout:25];
         (
-          node["amenity"="optician"](${bounds.southWest.latitude},${bounds.southWest.longitude},${bounds.northEast.latitude},${bounds.northEast.longitude});
-          way["amenity"="optician"](${bounds.southWest.latitude},${bounds.southWest.longitude},${bounds.northEast.latitude},${bounds.northEast.longitude});
-          relation["amenity"="optician"](${bounds.southWest.latitude},${bounds.southWest.longitude},${bounds.northEast.latitude},${bounds.northEast.longitude});
+          nwr["shop"="optician"]$zona;
+          nwr["amenity"="optician"]$zona;
+          nwr["healthcare"="optometrist"]$zona;
+          nwr["healthcare:speciality"~"ophthalmology|optometry"]$zona;
         );
-        out body;
-        >;
-        out skel qt;
+        out center tags 100;
     """.trimIndent()
 
     try {
@@ -395,11 +397,12 @@ private suspend fun cargarOpticas(bounds: LatLngBounds, map: MapLibreMap) {
             for (i in 0 until elements.length()) {
                 val element = elements.optJSONObject(i)
                 if (element != null) {
-                    val lat = element.optDouble("lat", Double.NaN)
-                    val lon = element.optDouble("lon", Double.NaN)
+                    val centro = element.optJSONObject("center") ?: element
+                    val lat = centro.optDouble("lat", Double.NaN)
+                    val lon = centro.optDouble("lon", Double.NaN)
                     if (!lat.isNaN() && !lon.isNaN()) {
                         val tags = element.optJSONObject("tags")
-                        val name = tags?.optString("name")?.lowercase() ?: ""
+                        val name = tags?.optString("name", "")?.lowercase() ?: ""
                         val isPartner = name.contains("eyesofter")
 
                         val feature = com.google.gson.JsonObject().apply {

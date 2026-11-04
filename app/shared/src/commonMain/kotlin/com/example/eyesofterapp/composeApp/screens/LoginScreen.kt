@@ -1,5 +1,11 @@
 package com.example.eyesofterapp.composeApp.screens
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,7 +82,8 @@ fun LoginScreen(
         Box(
             modifier = Modifier
                 .size(88.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape),
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                .semantics { contentDescription = "Logotipo de EYESOFTER" },
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -90,6 +97,7 @@ fun LoginScreen(
         Spacer(Modifier.height(16.dp))
         Text(
             text = "EYESOFTER Suite",
+            modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -146,17 +154,22 @@ fun LoginScreen(
                     Text(
                         text = message,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodyMedium,
+                        // TalkBack lee el error en cuanto aparece
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                     )
                 }
 
                 Button(
                     onClick = { submit() },
                     enabled = !state.isLoading, // evita doble clic mientras espera al servidor
-                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                 ) {
                     if (state.isLoading) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(
+                            Modifier.size(20.dp).semantics { contentDescription = "Iniciando sesión" },
+                            strokeWidth = 2.dp
+                        )
                     } else {
                         Text("Iniciar sesión")
                     }

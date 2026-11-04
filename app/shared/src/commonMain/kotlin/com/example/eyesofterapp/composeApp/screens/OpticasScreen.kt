@@ -16,15 +16,28 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,31 +45,31 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.eyesofterapp.composeApp.theme.EyesBarraSuperior
-import com.example.eyesofterapp.composeApp.theme.EyesBotonFantasma
-import com.example.eyesofterapp.composeApp.theme.EyesBotonPrincipal
-import com.example.eyesofterapp.composeApp.theme.EyesBotonTexto
-import com.example.eyesofterapp.composeApp.theme.EyesColors
-import com.example.eyesofterapp.composeApp.theme.EyesEtiqueta
-import com.example.eyesofterapp.composeApp.theme.EyesMotion
-import com.example.eyesofterapp.composeApp.theme.EyesOpcion
-import com.example.eyesofterapp.composeApp.theme.EyesPildora
-import com.example.eyesofterapp.composeApp.theme.EyesPildoraOptica
-import com.example.eyesofterapp.composeApp.theme.EyesSelector
-import com.example.eyesofterapp.composeApp.theme.EyesSelectorOpcion
-import com.example.eyesofterapp.composeApp.theme.EyesShapes
-import com.example.eyesofterapp.composeApp.theme.EyesTarjeta
-import com.example.eyesofterapp.composeApp.theme.EyesTarjetaAcento
-import com.example.eyesofterapp.composeApp.theme.aparecer
+import com.example.eyesofterapp.domain.model.FUENTE_OSM
 import com.example.eyesofterapp.domain.model.Optica
 import com.example.eyesofterapp.ui.OpticasUiState
 import kotlin.math.roundToLong
+
+/** Altura mínima recomendada para que un botón sea fácil de tocar (Material / WCAG). */
+private val ALTO_TOQUE = 48.dp
+
+private enum class FiltroTipo { TODAS, ASOCIADAS, OTRAS }
 
 @Composable
 fun OpticasScreen(
@@ -68,10 +81,11 @@ fun OpticasScreen(
     onVolver: () -> Unit,
     onAbrirMapaEnVivo: (() -> Unit)? = null
 ) {
-    var vistaModoMapa by remember { mutableStateOf(true) }
-    var opticaSeleccionada by remember { mutableStateOf<Optica?>(null) }
-    var filtroDistanciaMaxKm by remember { mutableStateOf<Double?>(null) }
-    var filtroVerificadas by remember { mutableStateOf<Boolean?>(null) }
+    // La lista es la vista inicial: es la más cómoda en teléfono y con lector de pantalla.
+    var vistaMapa by rememberSaveable { mutableStateOf(false) }
+    var seleccionadaId by remember { mutableStateOf<Int?>(null) }
+    var filtroDistanciaKm by rememberSaveable { mutableStateOf<Double?>(null) }
+    var filtroTipo by rememberSaveable { mutableStateOf(FiltroTipo.TODAS) }
 
     LaunchedEffect(Unit) {
         if (state.opticas.isEmpty() && state.error == null && !state.cargando) {
@@ -79,321 +93,496 @@ fun OpticasScreen(
         }
     }
 
-    val opticasFiltradas = remember(state.opticas, filtroDistanciaMaxKm, filtroVerificadas) {
+    val opticasFiltradas = remember(state.opticas, filtroDistanciaKm, filtroTipo) {
         state.opticas.filter { optica ->
-            val cumpleDistancia = filtroDistanciaMaxKm == null || optica.distanciaKm <= filtroDistanciaMaxKm!!
-            val cumpleVerificada = filtroVerificadas == null || optica.verificada == filtroVerificadas!!
-            cumpleDistancia && cumpleVerificada
+            val cumpleDistancia = filtroDistanciaKm?.let { optica.distanciaKm <= it } ?: true
+            val cumpleTipo = when (filtroTipo) {
+                FiltroTipo.TODAS -> true
+                FiltroTipo.ASOCIADAS -> optica.verificada
+                FiltroTipo.OTRAS -> !optica.verificada
+            }
+            cumpleDistancia && cumpleTipo
         }
     }
+    val seleccionada = opticasFiltradas.firstOrNull { it.id == seleccionadaId } ?: opticasFiltradas.firstOrNull()
 
-    Column(Modifier.fillMaxSize().background(EyesColors.Fondo)) {
-        EyesBarraSuperior(accion = "Volver", onAccion = onVolver)
-
-        // Toda la pantalla se desplaza como UNA sola página. Antes estaba partida en
-        // dos zonas (controles arriba y mapa abajo) que se repartían la altura, y el
-        // mapa terminaba cortando los filtros.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+    Scaffold(topBar = { Encabezado(onVolver) }) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+            // Abajo deja 96 dp libres para que el botón flotante «Mapa» de Android no tape la última tarjeta.
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Título + acceso al mapa real (MapLibre). Antes era un botón flotante que
-                // tapaba el contenido en todas las pantallas; ahora vive solo aquí.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Ópticas cercanas", style = MaterialTheme.typography.headlineMedium, color = EyesColors.Texto)
-                    if (onAbrirMapaEnVivo != null) {
-                        EyesBotonFantasma("Mapa en vivo", onClick = onAbrirMapaEnVivo)
-                    }
-                }
-
-                if (state.mostrandoCache) {
-                    EyesTarjetaAcento(fondo = EyesColors.AmarilloBg, modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "Sin conexión: se muestran los datos guardados.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = EyesColors.AmarilloFg
-                        )
-                    }
-                }
-
-                // Estado del GPS: píldora (real o simulado) + coordenadas + acción para cambiar.
-                state.coordenadasGps?.let { coords ->
-                    EyesTarjeta(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (state.esUbicacionSimulada) {
-                                    EyesPildora("Ubicación simulada", EyesColors.AmarilloBg, EyesColors.AmarilloFg)
-                                } else {
-                                    EyesPildora("GPS real activo", EyesColors.VerdeBg, EyesColors.VerdeFg)
-                                }
-                                Text(
-                                    text = "${coords.lat.cuatroDecimales()}, ${coords.lng.cuatroDecimales()}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = EyesColors.TextoSecundario
-                                )
-                                Text(
-                                    text = if (state.esUbicacionSimulada)
-                                        "Punto de demostración en Tulancingo, Hgo., para probar el sensor."
-                                    else
-                                        "Coordenadas obtenidas del sensor de posicionamiento.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = EyesColors.TextoTenue
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            if (state.esUbicacionSimulada) {
-                                EyesBotonFantasma("Usar GPS", onClick = onSolicitarUbicacion)
-                            } else {
-                                EyesBotonFantasma("Simular", onClick = onSimularUbicacion)
-                            }
-                        }
-                    }
-                }
-
-                // Búsqueda por ciudad o C.P.: el único botón relleno de la pantalla.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = state.busquedaTexto,
-                        onValueChange = onActualizarBusquedaTexto,
-                        label = { Text("Buscar por ciudad o C.P.") },
-                        singleLine = true,
-                        shape = EyesShapes.Boton,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = EyesColors.Azul,
-                            unfocusedBorderColor = EyesColors.Borde,
-                            focusedContainerColor = EyesColors.Blanco,
-                            unfocusedContainerColor = EyesColors.Blanco,
-                            focusedLabelColor = EyesColors.Azul,
-                            cursorColor = EyesColors.Azul
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    EyesBotonPrincipal(
-                        texto = "Buscar",
-                        onClick = { onBuscarPorCiudad(state.busquedaTexto) },
-                        enabled = !state.cargando && state.busquedaTexto.isNotBlank()
-                    )
-                }
-
-                // Selector Mapa | Lista + acciones de ubicación
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    EyesSelector {
-                        EyesSelectorOpcion("Mapa", seleccionada = vistaModoMapa, onClick = { vistaModoMapa = true })
-                        EyesSelectorOpcion("Lista", seleccionada = !vistaModoMapa, onClick = { vistaModoMapa = false })
-                    }
-                    Row {
-                        EyesBotonTexto("GPS real", onClick = onSolicitarUbicacion, enabled = !state.cargando, color = EyesColors.Azul)
-                        EyesBotonTexto("Simular", onClick = onSimularUbicacion, enabled = !state.cargando, color = EyesColors.Azul)
-                    }
-                }
-
-                // Filtros: se desplazan de lado si no caben en pantallas angostas.
-                EyesEtiqueta("Tipo", color = EyesColors.TextoTenue)
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    EyesOpcion("Todas (${state.opticas.size})", filtroVerificadas == null, { filtroVerificadas = null })
-                    EyesOpcion(
-                        "Asociadas (${state.opticas.count { it.verificada }})",
-                        filtroVerificadas == true,
-                        { filtroVerificadas = if (filtroVerificadas == true) null else true }
-                    )
-                    EyesOpcion(
-                        "Externas (${state.opticas.count { !it.verificada }})",
-                        filtroVerificadas == false,
-                        { filtroVerificadas = if (filtroVerificadas == false) null else false }
-                    )
-                }
-
-                EyesEtiqueta("Distancia", color = EyesColors.TextoTenue)
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    EyesOpcion("Cualquiera", filtroDistanciaMaxKm == null, { filtroDistanciaMaxKm = null })
-                    EyesOpcion("Menos de 5 km", filtroDistanciaMaxKm == 5.0, { filtroDistanciaMaxKm = 5.0 })
-                    EyesOpcion("Menos de 10 km", filtroDistanciaMaxKm == 10.0, { filtroDistanciaMaxKm = 10.0 })
-                }
-
-                if (state.cargando) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(120.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = EyesColors.Azul)
-                    }
-                }
-
-                state.error?.let { errorMsg ->
-                    EyesTarjeta(Modifier.fillMaxWidth()) {
-                        EyesPildora("Ubicación no disponible", EyesColors.RojoBg, EyesColors.RojoFg)
-                        Text(
-                            text = errorMsg,
-                            color = EyesColors.Texto,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        EyesBotonFantasma(
-                            "Pedir permiso de GPS de nuevo",
-                            onClick = onSolicitarUbicacion,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        EyesBotonTexto(
-                            "Simular ubicación (demostración)",
-                            onClick = onSimularUbicacion,
-                            color = EyesColors.Azul,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            } // Fin de la parte de arriba
-
-            if (!state.cargando && opticasFiltradas.isEmpty() && state.error == null) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "No se encontraron ópticas con los filtros seleccionados.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = EyesColors.TextoSecundario
-                    )
-                }
-            } else {
-                // Mapa ⇄ Lista: fundido corto entre las dos vistas, para que el cambio no
-                // sea un salto brusco. Sin desplazamiento: ocupan el mismo lugar.
-                AnimatedContent(
-                    targetState = vistaModoMapa,
-                    transitionSpec = {
-                        fadeIn(tween(EyesMotion.Pantalla, easing = EyesMotion.EaseOut))
-                            .togetherWith(fadeOut(tween(EyesMotion.Salida)))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = "mapaLista"
-                ) { mostrarMapa ->
-                    if (mostrarMapa) {
-                        MapaOpticasView(
-                            userCoords = state.coordenadasGps,
-                            esUbicacionSimulada = state.esUbicacionSimulada,
-                            opticas = opticasFiltradas,
-                            opticaSeleccionada = opticaSeleccionada ?: opticasFiltradas.firstOrNull(),
-                            onSeleccionarOptica = { opticaSeleccionada = it },
-                            onCentrarUbicacion = onSolicitarUbicacion,
-                            onSimularUbicacion = onSimularUbicacion
-                        )
-                    } else {
-                        // Column normal (no LazyColumn): la página entera ya se desplaza y
-                        // el catálogo es corto. Las tarjetas entran escalonadas.
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            opticasFiltradas.forEachIndexed { i, optica ->
-                                key(optica.id) {
-                                    Box(Modifier.aparecer(indice = i.coerceAtMost(6))) {
-                                        OpticaCard(
-                                            optica = optica,
-                                            onClick = {
-                                                opticaSeleccionada = optica
-                                                vistaModoMapa = true
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            item(key = "ubicacion") {
+                TarjetaUbicacion(state, onSolicitarUbicacion, onSimularUbicacion)
             }
-        }
-    }
-}
-
-/** Coordenada con 4 decimales (unos 11 m de precisión), por ejemplo 20.0825. */
-private fun Double.cuatroDecimales(): String = ((this * 10_000).roundToLong() / 10_000.0).toString()
-
-/** Distancia con un decimal, por ejemplo "2.5 km". */
-internal fun Optica.distanciaTexto(): String = "${((distanciaKm * 10).toInt() / 10.0)} km"
-
-/** Abre Google Maps con la ruta a la óptica. */
-internal fun Optica.urlComoLlegar(): String =
-    "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&destination_place_id=$nombre"
-
-@Composable
-fun OpticaCard(optica: Optica, onClick: (() -> Unit)? = null) {
-    val uriHandler = LocalUriHandler.current
-
-    EyesTarjeta(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(optica.nombre, style = MaterialTheme.typography.titleMedium, color = EyesColors.Texto)
-                EyesPildoraOptica(optica.verificada)
+            item(key = "busqueda") {
+                BarraBusqueda(state, onBuscarPorCiudad, onActualizarBusquedaTexto)
             }
-            if (optica.distanciaKm > 0.0) {
-                Text(
-                    text = optica.distanciaTexto(),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (optica.verificada) EyesColors.Azul else EyesColors.TextoSecundario
+            item(key = "vista") {
+                SelectorVista(vistaMapa = vistaMapa, onCambiar = { vistaMapa = it })
+            }
+            item(key = "filtros") {
+                Filtros(
+                    opticas = state.opticas,
+                    filtroTipo = filtroTipo,
+                    onTipo = { filtroTipo = it },
+                    filtroDistanciaKm = filtroDistanciaKm,
+                    onDistancia = { filtroDistanciaKm = it }
                 )
             }
-        }
 
-        Text(optica.direccion, style = MaterialTheme.typography.bodyMedium, color = EyesColors.TextoSecundario)
-        if (optica.ciudad.isNotBlank() || optica.codigoPostal.isNotBlank()) {
-            Text(
-                text = "${optica.ciudad} ${optica.codigoPostal}".trim(),
-                style = MaterialTheme.typography.bodySmall,
-                color = EyesColors.TextoTenue
-            )
-        }
+            if (state.cargando) {
+                item(key = "cargando") { Cargando() }
+            }
 
-        // En una lista hay muchas tarjetas: sus acciones son "fantasma" y de texto,
-        // para no llenar la pantalla de botones azules.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            EyesBotonFantasma(
-                "Cómo llegar",
-                onClick = { try { uriHandler.openUri(optica.urlComoLlegar()) } catch (_: Exception) { } },
-                modifier = Modifier.weight(1f)
-            )
-            EyesBotonTexto(
-                "Llamar",
-                onClick = { try { uriHandler.openUri("tel:${optica.telefono}") } catch (_: Exception) { } },
-                color = EyesColors.Azul
-            )
-            if (onClick != null) {
-                EyesBotonTexto("Ver en mapa", onClick = onClick, color = EyesColors.Azul)
+            state.error?.let { mensaje ->
+                item(key = "error") {
+                    TarjetaAviso(
+                        mensaje = mensaje,
+                        mostrandoCache = state.mostrandoCache,
+                        onReintentar = onSolicitarUbicacion,
+                        onSimular = onSimularUbicacion
+                    )
+                }
+
+            if (!state.cargando) {
+                item(key = "resumen") { Resumen(opticasFiltradas.size, state) }
+            }
+
+            if (!state.cargando && opticasFiltradas.isEmpty()) {
+                item(key = "vacio") { EstadoVacio(hayFiltros = filtroDistanciaKm != null || filtroTipo != FiltroTipo.TODAS) }
+            } else if (vistaMapa) {
+                item(key = "mapa") {
+                    MapaOpticasView(
+                        userCoords = state.coordenadasGps,
+                        esUbicacionSimulada = state.esUbicacionSimulada,
+                        opticas = opticasFiltradas,
+                        opticaSeleccionada = seleccionada,
+                        onSeleccionarOptica = { seleccionadaId = it.id },
+                        onCentrarUbicacion = onSolicitarUbicacion,
+                        etiquetaCentro = when {
+                            state.lugarBuscado != null -> "Lugar buscado"
+                            state.esUbicacionSimulada -> "Demostración"
+                            else -> "Tú estás aquí"
+                        }
+                    )
+                }
+                seleccionada?.let { optica ->
+                    item(key = "seleccionada") { OpticaCard(optica = optica, resaltada = true) }
+                }
+            } else {
+                items(opticasFiltradas, key = { "${it.fuente}-${it.id}" }) { optica ->
+                    OpticaCard(
+                        optica = optica,
+                        onVerEnMapa = {
+                            seleccionadaId = optica.id
+                            vistaMapa = true
+                        }
+                    )
+                }
+            }
+
+            item(key = "atribucion") { Atribucion() }
+        }
+    }
+}
+
+// --------------------------------------------------------------------------------------
+// Partes de la pantalla
+// --------------------------------------------------------------------------------------
+
+@Composable
+private fun Encabezado(onVolver: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .statusBarsPadding()
+            .padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Ópticas cercanas",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.weight(1f).semantics { heading() }
+        )
+        TextButton(onClick = onVolver, modifier = Modifier.heightIn(min = ALTO_TOQUE)) {
+            Text("Volver")
+        }
+    }
+}
+
+@Composable
+private fun TarjetaUbicacion(
+    state: OpticasUiState,
+    onSolicitarUbicacion: () -> Unit,
+    onSimularUbicacion: () -> Unit
+) {
+    val coords = state.coordenadasGps
+    val (titulo, detalle) = when {
+        state.lugarBuscado != null -> "Buscando cerca de:" to state.lugarBuscado.orEmpty()
+        coords == null -> "Ubicación" to "Toca «Usar mi ubicación» para encontrar ópticas cerca de ti, o busca una ciudad."
+        state.esUbicacionSimulada -> "Ubicación de demostración" to "Tulancingo, Hgo. No viene del sensor de tu teléfono."
+        else -> (if (state.esUltimaConocida) "Tu última ubicación conocida" else "Tu ubicación (GPS)") to buildString {
+            append("${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}")
+            state.precisionMetros?.let { append(" · precisión ±${it.toInt()} m") }
+            state.proveedorGps?.let { append(" · $it") }
+        }
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.tertiaryContainer
+            else MaterialTheme.colorScheme.secondaryContainer
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(titulo, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(detalle, style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onSolicitarUbicacion,
+                    enabled = !state.cargando,
+                    modifier = Modifier.weight(1f).heightIn(min = ALTO_TOQUE)
+                ) { Text("Usar mi ubicación") }
+                OutlinedButton(
+                    onClick = onSimularUbicacion,
+                    enabled = !state.cargando,
+                    modifier = Modifier.weight(1f).heightIn(min = ALTO_TOQUE)
+                ) { Text("Demostración") }
             }
         }
     }
 }
+
+@Composable
+private fun BarraBusqueda(
+    state: OpticasUiState,
+    onBuscar: (String) -> Unit,
+    onTexto: (String) -> Unit
+) {
+    val foco = LocalFocusManager.current
+    val buscar = {
+        foco.clearFocus()
+        onBuscar(state.busquedaTexto)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = state.busquedaTexto,
+            onValueChange = onTexto,
+            label = { Text("Ciudad, colonia o código postal") },
+            placeholder = { Text("Ej. Pachuca, 43600 o Madrid") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { if (state.busquedaTexto.isNotBlank()) buscar() }),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = buscar,
+            enabled = !state.cargando && state.busquedaTexto.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = ALTO_TOQUE)
+        ) { Text("Buscar ópticas en ese lugar") }
+    }
+}
+
+@Composable
+private fun SelectorVista(vistaMapa: Boolean, onCambiar: (Boolean) -> Unit) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SegmentedButton(
+            selected = !vistaMapa,
+            onClick = { onCambiar(false) },
+            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+            modifier = Modifier.heightIn(min = ALTO_TOQUE)
+        ) { Text("Lista") }
+        SegmentedButton(
+            selected = vistaMapa,
+            onClick = { onCambiar(true) },
+            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+            modifier = Modifier.heightIn(min = ALTO_TOQUE)
+        ) { Text("Mapa") }
+    }
+}
+
+@Composable
+private fun Filtros(
+    opticas: List<Optica>,
+    filtroTipo: FiltroTipo,
+    onTipo: (FiltroTipo) -> Unit,
+    filtroDistanciaKm: Double?,
+    onDistancia: (Double?) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Se desliza hacia los lados: así ningún filtro queda cortado en pantallas angostas.
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = filtroTipo == FiltroTipo.TODAS,
+                onClick = { onTipo(FiltroTipo.TODAS) },
+                label = { Text("Todas (${opticas.size})") }
+            )
+            FilterChip(
+                selected = filtroTipo == FiltroTipo.ASOCIADAS,
+                onClick = { onTipo(if (filtroTipo == FiltroTipo.ASOCIADAS) FiltroTipo.TODAS else FiltroTipo.ASOCIADAS) },
+                label = { Text("Asociadas EYESOFTER (${opticas.count { it.verificada }})") }
+            )
+            FilterChip(
+                selected = filtroTipo == FiltroTipo.OTRAS,
+                onClick = { onTipo(if (filtroTipo == FiltroTipo.OTRAS) FiltroTipo.TODAS else FiltroTipo.OTRAS) },
+                label = { Text("Otras ópticas (${opticas.count { !it.verificada }})") }
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf<Pair<Double?, String>>(null to "Cualquier distancia", 1.0 to "Menos de 1 km", 5.0 to "Menos de 5 km", 10.0 to "Menos de 10 km")
+                .forEach { (km, texto) ->
+                    FilterChip(
+                        selected = filtroDistanciaKm == km,
+                        onClick = { onDistancia(km) },
+                        label = { Text(texto) }
+                    )
+                }
+        }
+    }
+}
+
+@Composable
+private fun Cargando() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+        Spacer(Modifier.width(12.dp))
+        Text("Buscando ópticas cerca…", style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
+private fun TarjetaAviso(
+    mensaje: String,
+    mostrandoCache: Boolean,
+    onReintentar: () -> Unit,
+    onSimular: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = if (mostrandoCache) "Sin conexión: mostrando datos guardados" else "Aviso",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(mensaje, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = onReintentar, modifier = Modifier.weight(1f).heightIn(min = ALTO_TOQUE)) {
+                    Text("Reintentar")
+                }
+                OutlinedButton(onClick = onSimular, modifier = Modifier.weight(1f).heightIn(min = ALTO_TOQUE)) {
+                    Text("Demostración")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Resumen(cantidad: Int, state: OpticasUiState) {
+    val texto = buildString {
+        append(
+            when (cantidad) {
+                0 -> "Sin resultados"
+                1 -> "1 óptica"
+                else -> "$cantidad ópticas"
+            }
+        )
+        state.radioBusquedaKm?.let { append(" en un radio de $it km") }
+        append(", de la más cercana a la más lejana.")
+    }
+    Text(
+        text = texto,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+    )
+}
+
+@Composable
+private fun EstadoVacio(hayFiltros: Boolean) {
+    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = if (hayFiltros) "No hay ópticas con estos filtros. Prueba con «Cualquier distancia» o «Todas»."
+            else "No encontramos ópticas registradas cerca de este punto. Busca una ciudad cercana.",
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
+}
+
+@Composable
+private fun Atribucion() {
+    val uri = LocalUriHandler.current
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp)) {
+        Text(
+            text = "Ópticas y mapa: © colaboradores de OpenStreetMap (ODbL). " +
+                "Las ópticas asociadas provienen del servidor EYESOFTER. " +
+                "Los datos de OpenStreetMap los aporta la comunidad y pueden estar incompletos.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(
+            onClick = { abrir(uri, "https://www.openstreetmap.org/copyright") },
+            modifier = Modifier.heightIn(min = ALTO_TOQUE)
+        ) { Text("Ver licencia de OpenStreetMap") }
+    }
+}
+
+// --------------------------------------------------------------------------------------
+// Tarjeta de una óptica
+// --------------------------------------------------------------------------------------
+
+@Composable
+fun OpticaCard(
+    optica: Optica,
+    resaltada: Boolean = false,
+    onVerEnMapa: (() -> Unit)? = null
+) {
+    val uri = LocalUriHandler.current
+    val telefono = optica.telefono.filter { it.isDigit() || it == '+' }
+    val esOsm = optica.fuente == FUENTE_OSM
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = if (resaltada) androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (optica.verificada) 3.dp else 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    text = optica.nombre,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).semantics { heading() }
+                )
+                if (optica.distanciaKm > 0.0) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = formatoDistancia(optica.distanciaKm),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.semantics { contentDescription = "a ${distanciaHablada(optica.distanciaKm)}" }
+                    )
+                }
+            }
+
+            Etiqueta(
+                texto = when {
+                    optica.verificada -> "Asociada EYESOFTER"
+                    esOsm -> "Registrada en OpenStreetMap"
+                    else -> "Catálogo EYESOFTER"
+                },
+                fondo = if (optica.verificada) Color(0xFFDDF1E1) else MaterialTheme.colorScheme.surfaceVariant,
+                texto2 = if (optica.verificada) Color(0xFF14532D) else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            val lineaDireccion = listOf(optica.direccion, optica.ciudad, optica.codigoPostal)
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+            Text(lineaDireccion, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            if (optica.horario.isNotBlank()) {
+                Text("Horario: ${optica.horario}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+            Spacer(Modifier.height(2.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        // Enlace de Google Maps gratuito (no requiere llave): abre la app de mapas con la ruta.
+                        abrir(uri, "https://www.google.com/maps/dir/?api=1&destination=${optica.lat},${optica.lng}")
+                    },
+                    modifier = Modifier.weight(1f).heightIn(min = ALTO_TOQUE)
+                ) { Text("Cómo llegar") }
+                if (telefono.length >= 7) {
+                    OutlinedButton(
+                        onClick = { abrir(uri, "tel:$telefono") },
+                        modifier = Modifier.weight(1f).heightIn(min = ALTO_TOQUE)
+                    ) { Text("Llamar") }
+                }
+            }
+            if (optica.sitioWeb.isNotBlank() || onVerEnMapa != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    if (optica.sitioWeb.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                val web = optica.sitioWeb.let { if (it.startsWith("http")) it else "https://$it" }
+                                abrir(uri, web)
+                            },
+                            modifier = Modifier.heightIn(min = ALTO_TOQUE)
+                        ) { Text("Sitio web") }
+                    }
+                    if (onVerEnMapa != null) {
+                        TextButton(onClick = onVerEnMapa, modifier = Modifier.heightIn(min = ALTO_TOQUE)) {
+                            Text("Ver en el mapa")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Etiqueta(texto: String, fondo: Color, texto2: Color) {
+    Surface(color = fondo, shape = RoundedCornerShape(6.dp)) {
+        Text(
+            text = texto,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = texto2,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+// --------------------------------------------------------------------------------------
+// Utilidades
+// --------------------------------------------------------------------------------------
+
+private fun abrir(uri: androidx.compose.ui.platform.UriHandler, url: String) {
+    try {
+        uri.openUri(url)
+    } catch (_: Exception) {
+        // Sin app para abrir el enlace (por ejemplo, "tel:" en una tablet sin teléfono).
+    }
+}
+
+internal fun formatoDistancia(km: Double): String =
+    if (km < 1.0) "${((km * 1000).toInt() / 10) * 10} m"
+    else "${(km * 10).toInt() / 10.0} km"
+
+internal fun distanciaHablada(km: Double): String =
+    if (km < 1.0) "${((km * 1000).toInt() / 10) * 10} metros"
+    else "${(km * 10).toInt() / 10.0} kilómetros"
+
+private fun formatoCoord(valor: Double): String =
+    ((valor * 100_000).toLong() / 100_000.0).toString()

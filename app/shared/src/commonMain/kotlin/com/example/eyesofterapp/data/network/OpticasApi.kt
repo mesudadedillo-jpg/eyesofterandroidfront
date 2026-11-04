@@ -9,7 +9,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
-import com.example.eyesofterapp.domain.model.distanciaHaversineKm
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 class OpticasApi(private val client: HttpClient) {
 
@@ -24,26 +25,70 @@ class OpticasApi(private val client: HttpClient) {
         Optica(8, "Optometría Moderna", "Zaragoza 202", "Monterrey", "64000", 25.686614, -100.316113, 4.0, "8183123456", false)
     )
 
-    suspend fun getOpticasCercanas(lat: Double, lng: Double): ResultadoRed<List<Optica>> {
-        val resultado = ejecutarPeticion {
-            client.get("/opticas/cercanas") {
-                parameter("lat", lat)
-                parameter("lng", lng)
+    private val osm = OsmApi(client)
+
+    /** Radio (km) que se usó en la última búsqueda de OpenStreetMap; null si no se pudo consultar. */
+    var ultimoRadioKm: Int? = null
+        private set
+
+    /**
+     * Ópticas cercanas a (lat, lng), en cualquier parte del mundo:
+     *  1. En paralelo: el servidor EYESOFTER (ópticas asociadas) y OpenStreetMap (todas las demás).
+     *  2. Se combinan sin duplicados y se ordenan por distancia.
+     *  3. Si ninguna de las dos fuentes responde, se usa el catálogo local como último recurso.
+     */
+    suspend fun getOpticasCercanas(lat: Double, lng: Double): ResultadoRed<List<Optica>> = coroutineScope {
+        val delServidor = async {
+            ejecutarPeticion {
+                client.get("/opticas/cercanas") {
+                    parameter("lat", lat)
+                    parameter("lng", lng)
+                }
             }
         }
+        val deOsm = async { osm.buscarOpticas(lat, lng) }
 
-        if (resultado is ResultadoRed.Exito && resultado.data.isNotEmpty()) {
-            return resultado
+        val resultadoServidor = delServidor.await()
+        val resultadoOsm = deOsm.await()
+        ultimoRadioKm = resultadoOsm?.radioKm
+
+        val asociadas = (resultadoServidor as? ResultadoRed.Exito)?.data.orEmpty()
+            .map { it.copy(distanciaKm = distanciaKm(lat, lng, it.lat, it.lng)) }
+            .filter { it.distanciaKm <= RADIO_MAX_ASOCIADAS_KM }
+
+        val combinada = combinar(asociadas, resultadoOsm?.opticas.orEmpty())
+        if (combinada.isNotEmpty()) {
+            DiskOpticasCache.guardar(combinada)
+            return@coroutineScope ResultadoRed.Exito(combinada)
         }
+        // OpenStreetMap respondió pero no hay ópticas registradas cerca: lista vacía (no es un error).
+        if (resultadoOsm != null) return@coroutineScope ResultadoRed.Exito(emptyList())
 
-        val localList = opticasCatalogo.map { optica ->
-            val dist = calcularHaversine(lat, lng, optica.lat, optica.lng)
-            optica.copy(distanciaKm = dist)
-        }.sortedBy { it.distanciaKm }
-
-        DiskOpticasCache.guardar(localList)
-        return ResultadoRed.Exito(localList)
+        // Ninguna fuente respondió: catálogo local de respaldo.
+        val localList = opticasCatalogo
+            .map { it.copy(distanciaKm = distanciaKm(lat, lng, it.lat, it.lng)) }
+            .sortedBy { it.distanciaKm }
+        ResultadoRed.Exito(localList)
     }
+
+    /** Convierte "Tulancingo", "43600" o "Guadalajara" en coordenadas (Nominatim, gratis). */
+    suspend fun geocodificar(texto: String): OsmApi.LugarEncontrado? = osm.geocodificar(texto)
+
+    /** Quita de OSM las ópticas que ya están como asociadas (mismo lugar o mismo nombre muy cerca). */
+    private fun combinar(asociadas: List<Optica>, deOsm: List<Optica>): List<Optica> {
+        val sinDuplicar = deOsm.filter { o ->
+            asociadas.none { a ->
+                val d = distanciaKm(a.lat, a.lng, o.lat, o.lng)
+                d < 0.06 || (d < 0.2 && normalizar(a.nombre) == normalizar(o.nombre))
+            }
+        }
+        return (asociadas + sinDuplicar).sortedBy { it.distanciaKm }.take(MAX_RESULTADOS)
+    }
+
+    private fun normalizar(texto: String): String =
+        texto.lowercase()
+            .replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+            .filter { it.isLetterOrDigit() }
 
     suspend fun getOpticasPorCiudadOZip(query: String): ResultadoRed<List<Optica>> {
         val resultado = ejecutarPeticion {
@@ -116,8 +161,9 @@ class OpticasApi(private val client: HttpClient) {
         }
     }
 
-    // Usa la fórmula compartida (domain/model/Coordenadas.kt). Antes aquí había
-    // una copia con acos en lugar de asin, que daba distancias incorrectas.
-    private fun calcularHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double =
-        distanciaHaversineKm(lat1, lon1, lat2, lon2)
+    private companion object {
+        /** Las asociadas solo se muestran si están a menos de esta distancia. */
+        const val RADIO_MAX_ASOCIADAS_KM = 50.0
+        const val MAX_RESULTADOS = 80
+    }
 }

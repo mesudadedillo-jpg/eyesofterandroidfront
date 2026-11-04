@@ -17,16 +17,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,36 +39,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.eyesofterapp.composeApp.theme.aparecer
-import com.example.eyesofterapp.domain.model.distanciaHaversineKm
-import kotlin.math.PI
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.ln
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.roundToInt
-import kotlin.math.sin
-import com.example.eyesofterapp.composeApp.theme.EyesBotonFantasma
-import com.example.eyesofterapp.composeApp.theme.EyesBotonTexto
-import com.example.eyesofterapp.composeApp.theme.EyesColors
-import com.example.eyesofterapp.composeApp.theme.EyesMotion
-import com.example.eyesofterapp.composeApp.theme.EyesPildora
-import com.example.eyesofterapp.composeApp.theme.EyesPildoraOptica
-import com.example.eyesofterapp.composeApp.theme.EyesShapes
-import com.example.eyesofterapp.composeApp.theme.EyesTarjeta
+import com.example.eyesofterapp.data.network.distanciaKm
 import com.example.eyesofterapp.domain.model.Coordenadas
 import com.example.eyesofterapp.domain.model.Optica
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+
+/** A zoom 1 el mapa muestra ±5 km alrededor del centro. */
+private const val RADIO_BASE_KM = 5.0
+private const val ZOOM_MIN = 0.1f   // ±50 km
+private const val ZOOM_MAX = 10f    // ±500 m
+/** Más marcadores que esto vuelven el mapa ilegible en un teléfono. */
+private const val MAX_MARCADORES = 40
+
+private val COLOR_ASOCIADA = Color(0xFF1B7A3A)
+private val COLOR_OTRA = Color(0xFF6B7280)
 
 /**
- * Mapa ilustrado (dibujado con Canvas, sin servicio de mapas): calles en
- * blanco y celeste sobre el fondo de la paleta, las ópticas como puntos
- * colocados según su dirección y distancia reales (ver posicionesRadar) y
- * controles redondos con borde fino.
+ * Mapa esquemático (sin mosaicos) que funciona en todas las plataformas.
+ * Coloca cada óptica según su latitud/longitud respecto al centro (norte arriba).
+ * El mapa real con calles está en Android: botón «Mapa» → PantallaMapa (MapLibre).
  */
 @Composable
 fun MapaOpticasView(
@@ -78,322 +75,190 @@ fun MapaOpticasView(
     opticaSeleccionada: Optica?,
     onSeleccionarOptica: (Optica) -> Unit,
     onCentrarUbicacion: () -> Unit,
-    onSimularUbicacion: (() -> Unit)? = null
+    onSimularUbicacion: (() -> Unit)? = null,
+    etiquetaCentro: String = if (esUbicacionSimulada) "Demostración" else "Tú estás aquí"
 ) {
-    val uriHandler = LocalUriHandler.current
-    var zoomLevel by remember { mutableStateOf(1f) }
+    val referencia = userCoords ?: opticas.firstOrNull()?.let { Coordenadas(it.lat, it.lng) }
+    val zoomInicial = remember(referencia, opticas) { calcularZoomInicial(referencia, opticas) }
+    var zoomLevel by remember(zoomInicial) { mutableStateOf(zoomInicial) }
     var mapaExpandido by remember { mutableStateOf(false) }
+    val visibles = remember(opticas) { opticas.sortedBy { it.distanciaKm }.take(MAX_MARCADORES) }
+    val radioKm = RADIO_BASE_KM / zoomLevel
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (mapaExpandido) 520.dp else 380.dp)
-            .clip(EyesShapes.Tarjeta)
-            .background(EyesColors.Celeste050)
-            .border(1.dp, EyesColors.Borde, EyesShapes.Tarjeta)
-    ) {
-        // Fondo: cuadrícula de calles que se escala con el zoom
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val canvasWidth = size.width
-            val canvasHeight = size.height
-
-            val strokeWidth = 6f * zoomLevel
-            val dashPathEffect = PathEffect.dashPathEffect(floatArrayOf(15f * zoomLevel, 15f * zoomLevel), 0f)
-            val stepX = (canvasWidth / 5f) * zoomLevel
-            val stepY = (canvasHeight / 5f) * zoomLevel
-
-            // Calles principales
-            var y = 0f
-            while (y < canvasHeight) {
-                drawLine(EyesColors.Blanco, Offset(0f, y), Offset(canvasWidth, y), strokeWidth = strokeWidth * 2)
-                y += stepY.coerceAtLeast(40f)
-            }
-            var x = 0f
-            while (x < canvasWidth) {
-                drawLine(EyesColors.Blanco, Offset(x, 0f), Offset(x, canvasHeight), strokeWidth = strokeWidth * 2)
-                x += stepX.coerceAtLeast(40f)
-            }
-
-            // Calles secundarias discontinuas
-            var secY = 0f
-            while (secY < canvasHeight) {
-                drawLine(
-                    color = EyesColors.Celeste200,
-                    start = Offset(0f, secY),
-                    end = Offset(canvasWidth, secY),
-                    strokeWidth = strokeWidth,
-                    pathEffect = dashPathEffect
-                )
-                secY += (stepY / 2f).coerceAtLeast(20f)
-            }
-        }
-
-        // Marcadores: se colocan como en un RADAR alrededor del usuario.
-        //  - Dirección real: el ángulo apunta hacia donde está la óptica.
-        //  - Distancia en escala logarítmica: las cercanas (Tulancingo) quedan
-        //    separadas entre sí y las lejanas (Monterrey) no se salen del mapa.
-        //  - Solo la seleccionada muestra su nombre; las demás son puntos que se
-        //    pueden tocar. Así ningún texto se encima.
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val densidad = LocalDensity.current
-            val anchoPx = constraints.maxWidth.toFloat()
-            val altoPx = constraints.maxHeight.toFloat()
-            // Se reserva la parte de abajo para la tarjeta de la óptica seleccionada.
-            val reservaAbajo = with(densidad) { 176.dp.toPx() }
-            val margen = with(densidad) { 30.dp.toPx() }
-            val separacion = with(densidad) { 30.dp.toPx() }
-            val centro = Offset(anchoPx / 2, ((altoPx - reservaAbajo) / 2 + margen / 2).coerceAtLeast(margen * 2))
-            val radioMax = (min(anchoPx / 2 - margen * 1.6f, centro.y - margen)).coerceAtLeast(margen)
-
-            // Sin GPS, el centro es el promedio de las ópticas.
-            val origen = userCoords ?: if (opticas.isEmpty()) null
-                else Coordenadas(opticas.map { it.lat }.average(), opticas.map { it.lng }.average())
-
-            val posiciones = remember(opticas, origen, zoomLevel, anchoPx, altoPx) {
-                if (origen == null) emptyMap()
-                else posicionesRadar(opticas, origen, zoomLevel, centro, radioMax, separacion)
-            }
-
-            opticas.forEach { optica ->
-                val destino = posiciones[optica.id] ?: return@forEach
-                key(optica.id) {
-                    MarcadorOptica(
-                        optica = optica,
-                        destino = destino,
-                        seleccionada = opticaSeleccionada?.id == optica.id,
-                        anchoPx = anchoPx,
-                        onClick = { onSeleccionarOptica(optica) }
-                    )
-                }
-            }
-
-            // Marcador del usuario en el centro: anillo marino (como el iris del logotipo).
-            if (userCoords != null) {
-                Box(
-                    Modifier
-                        .centradoEn(centro.x, centro.y, anchoPx)
-                        .size(22.dp)
-                        .background(EyesColors.Blanco, CircleShape)
-                        .border(6.dp, EyesColors.Marino, CircleShape)
-                )
-                val dyPildora = with(densidad) { 26.dp.toPx() }
-                Box(Modifier.centradoEn(centro.x, centro.y + dyPildora, anchoPx)) {
-                    if (esUbicacionSimulada) {
-                        EyesPildora("Tú (simulado)", EyesColors.AmarilloBg, EyesColors.AmarilloFg)
-                    } else {
-                        EyesPildora("Tú estás aquí", EyesColors.Marino, EyesColors.Blanco)
-                    }
-                }
-            }
-        }
-
-        // Controles del mapa: acercar, alejar, agrandar y centrar
-        Column(
-            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            ControlMapa("+", "Acercar") { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.5f) }
-            ControlMapa("−", "Alejar") { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.6f) }
-            ControlMapa(if (mapaExpandido) "↥" else "↧", "Cambiar tamaño", activo = mapaExpandido) {
-                mapaExpandido = !mapaExpandido
-            }
-            ControlMapa("◎", "Centrar en mi ubicación") {
-                zoomLevel = 1f
-                onCentrarUbicacion()
-            }
-        }
-
-        // Tarjeta de la óptica seleccionada, flotando abajo. Al elegir otra óptica,
-        // la nueva sube desde abajo (de donde "sale" la tarjeta) con fundido, y la
-        // anterior se desvanece: muestra que el contenido cambió, sin un salto.
-        AnimatedContent(
-            targetState = opticaSeleccionada,
-            contentKey = { it?.id },
-            transitionSpec = {
-                (fadeIn(tween(EyesMotion.Entrada, easing = EyesMotion.EaseOut)) +
-                    slideInVertically(tween(EyesMotion.Entrada, easing = EyesMotion.EaseOut)) { it / 6 })
-                    .togetherWith(fadeOut(tween(EyesMotion.Salida)))
-            },
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-            label = "opticaSeleccionada"
-        ) { seleccion ->
-          seleccion?.let { optica ->
-            EyesTarjeta(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                padding = PaddingValues(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(optica.nombre, style = MaterialTheme.typography.titleMedium, color = EyesColors.Texto)
-                        EyesPildoraOptica(optica.verificada)
-                    }
-                    if (optica.distanciaKm > 0.0) {
-                        Text(optica.distanciaTexto(), style = MaterialTheme.typography.titleSmall, color = EyesColors.Azul)
-                    }
-                }
-                Text(
-                    text = "${optica.direccion}, ${optica.ciudad}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = EyesColors.TextoSecundario
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    EyesBotonFantasma(
-                        "Cómo llegar",
-                        onClick = { try { uriHandler.openUri(optica.urlComoLlegar()) } catch (_: Exception) { } },
-                        modifier = Modifier.weight(1f)
-                    )
-                    EyesBotonTexto(
-                        "Llamar",
-                        onClick = { try { uriHandler.openUri("tel:${optica.telefono}") } catch (_: Exception) { } },
-                        color = EyesColors.Azul
-                    )
-                }
-            }
-          }
-        }
-    }
-}
-
-/**
- * Calcula dónde va cada óptica (en píxeles) dentro del mapa ilustrado.
- *
- * 1. Ángulo: dirección real de la óptica vista desde [origen]. La longitud se
- *    multiplica por cos(latitud) porque los meridianos se juntan hacia los polos.
- * 2. Radio: ln(1 + km) normalizado. Con escala logarítmica, 0.3 km y 3 km se
- *    distinguen bien, y 800 km no se sale del mapa. Empieza en 22 % del radio
- *    para no tapar el marcador del usuario. El zoom multiplica el radio.
- * 3. Si un punto queda a menos de [separacion] de otro, se gira un poco
- *    (+0.3, -0.3, +0.6... radianes) y, si no basta, se aleja un paso del
- *    centro, hasta encontrar lugar libre.
- * Las que con el zoom quedan fuera del área no se dibujan.
- */
-internal fun posicionesRadar(
-    opticas: List<Optica>,
-    origen: Coordenadas,
-    zoom: Float,
-    centro: Offset,
-    radioMax: Float,
-    separacion: Float
-): Map<Int, Offset> {
-    if (opticas.isEmpty()) return emptyMap()
-    val distancias = opticas.map { distanciaHaversineKm(origen.lat, origen.lng, it.lat, it.lng) }
-    val maxKm = max(distancias.max(), 1.0)
-    val cosLat = cos(origen.lat * PI / 180.0)
-    val ocupados = mutableListOf(centro)           // el usuario también ocupa lugar
-    val resultado = mutableMapOf<Int, Offset>()
-
-    opticas.forEachIndexed { i, o ->
-        val dx = (o.lng - origen.lng) * cosLat
-        val dy = -(o.lat - origen.lat)            // en pantalla, "arriba" es y negativa
-        val anguloBase = if (dx == 0.0 && dy == 0.0) i * 0.9 else atan2(dy, dx)
-        val fraccion = 0.22 + 0.78 * ln(1 + distancias[i]) / ln(1 + maxKm)
-        val r = (fraccion * radioMax * zoom).toFloat()
-        if (r > radioMax * 1.05f) return@forEachIndexed
-
-        fun punto(angulo: Double, radio: Float) = Offset(
-            centro.x + (cos(angulo) * radio).toFloat(),
-            centro.y + (sin(angulo) * radio).toFloat()
-        )
-        // Prueba el ángulo real y giros alternados; si cerca del centro no alcanza
-        // (los giros recorren poca distancia), aleja el punto un paso y vuelve a probar.
-        val giros = listOf(0.0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.2, -1.2)
-        val radios = listOf(r, r + separacion * 0.8f, r + separacion * 1.6f, r + separacion * 2.4f)
-            .map { it.coerceAtMost(radioMax) }
-        val elegido = radios.asSequence()
-            .flatMap { radio -> giros.asSequence().map { punto(anguloBase + it, radio) } }
-            .firstOrNull { p -> ocupados.none { (it - p).getDistance() < separacion } }
-            ?: punto(anguloBase, r)
-        ocupados += elegido
-        resultado[o.id] = elegido
-    }
-    return resultado
-}
-
-/**
- * Un marcador: punto de color (verde = asociada, gris = externa, azul =
- * seleccionada) con un área de toque de 40 dp. La seleccionada muestra su
- * nombre en una píldora arriba del punto.
- * Al hacer zoom, el punto se desliza a su nueva posición (200 ms, ease-in-out:
- * es movimiento dentro de la pantalla) en vez de brincar.
- */
-@Composable
-private fun MarcadorOptica(optica: Optica, destino: Offset, seleccionada: Boolean, anchoPx: Float, onClick: () -> Unit) {
-    val posicion by animateOffsetAsState(destino, tween(EyesMotion.Pantalla, easing = EyesMotion.EaseInOut), label = "posMarcador")
-    val colorDestino = when {
-        seleccionada -> EyesColors.Azul
-        optica.verificada -> EyesColors.VerdeBg
-        else -> EyesColors.Gris
-    }
-    val color by animateColorAsState(colorDestino, tween(EyesMotion.Color, easing = EyesMotion.Ease), label = "colorMarcador")
-    val tamano by animateDpAsState(if (seleccionada) 20.dp else 14.dp, tween(EyesMotion.Color, easing = EyesMotion.EaseOut), label = "tamMarcador")
-
-    // Área de toque (invisible) + punto
-    Box(
-        modifier = Modifier
-            .centradoEn(posicion.x, posicion.y, anchoPx)
-            .size(40.dp)
-            .clip(CircleShape)
-            .clickable(onClickLabel = "Seleccionar ${optica.nombre}", onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Box(
-            Modifier
-                .size(tamano)
-                .background(color, CircleShape)
-                .border(if (seleccionada) 3.dp else 2.dp, EyesColors.Blanco, CircleShape)
-        )
-    }
-
-    if (seleccionada) {
-        val dy = with(LocalDensity.current) { 28.dp.toPx() }
-        Text(
-            text = optica.nombre,
-            style = MaterialTheme.typography.labelMedium,
-            color = EyesColors.Blanco,
-            maxLines = 1,
             modifier = Modifier
-                .centradoEn(posicion.x, posicion.y - dy, anchoPx)
-                .aparecer(desplazamiento = 4.dp)
-                .clip(EyesShapes.Pildora)
-                .background(EyesColors.Azul)
-                .padding(horizontal = 10.dp, vertical = 4.dp)
+                .fillMaxWidth()
+                .height(if (mapaExpandido) 520.dp else 380.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFFE2ECE9))
+                .semantics {
+                    contentDescription = "Mapa esquemático con ${visibles.size} ópticas alrededor del centro. " +
+                        "Con lector de pantalla es más cómoda la vista Lista."
+                }
+        ) {
+            // Fondo: cuadrícula tipo calles que se ajusta al zoom
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val grosor = (6f * zoomLevel).coerceIn(2f, 14f)
+                val paso = (size.width / 5f * zoomLevel).coerceIn(40f, size.width)
+                val discontinua = PathEffect.dashPathEffect(floatArrayOf(grosor * 2, grosor * 2), 0f)
+                var y = 0f
+                while (y < size.height) {
+                    drawLine(Color.White, Offset(0f, y), Offset(size.width, y), strokeWidth = grosor * 2)
+                    drawLine(Color(0xFFCDE0D8), Offset(0f, y + paso / 2), Offset(size.width, y + paso / 2), strokeWidth = grosor, pathEffect = discontinua)
+                    y += paso
+                }
+                var x = 0f
+                while (x < size.width) {
+                    drawLine(Color.White, Offset(x, 0f), Offset(x, size.height), strokeWidth = grosor * 2)
+                    x += paso
+                }
+            }
+
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                if (referencia != null) {
+                    val kmPorGradoLng = 111.32 * cos(referencia.lat * PI / 180.0)
+                    // La seleccionada se dibuja al final para que quede encima.
+                    val orden = visibles.sortedBy { it.id == opticaSeleccionada?.id }
+                    orden.forEach { optica ->
+                        val dxKm = (optica.lng - referencia.lng) * kmPorGradoLng
+                        val dyKm = (optica.lat - referencia.lat) * 110.57
+                        if (abs(dxKm) > radioKm || abs(dyKm) > radioKm) return@forEach
+
+                        val fx = (0.5 + dxKm / (2 * radioKm)).toFloat()
+                        val fy = (0.5 - dyKm / (2 * radioKm)).toFloat()
+                        val seleccionada = opticaSeleccionada?.id == optica.id
+                        // Solo la seleccionada y las asociadas llevan nombre: así no se enciman.
+                        val conEtiqueta = seleccionada || optica.verificada
+                        val ajusteY = if (conEtiqueta) 36.dp else 16.dp
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(
+                                    start = (maxWidth * fx - 16.dp).coerceIn(0.dp, (maxWidth - 48.dp).coerceAtLeast(0.dp)),
+                                    top = (maxHeight * fy - ajusteY).coerceIn(0.dp, (maxHeight - 48.dp).coerceAtLeast(0.dp))
+                                )
+                                .clickable(onClickLabel = "ver detalles", role = Role.Button) { onSeleccionarOptica(optica) }
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = "${optica.nombre}, a ${distanciaHablada(optica.distanciaKm)}" +
+                                        if (optica.verificada) ", asociada EYESOFTER" else ""
+                                }
+                                .padding(8.dp)
+                        ) {
+                            if (conEtiqueta) {
+                                Surface(
+                                    color = if (seleccionada) MaterialTheme.colorScheme.primary else COLOR_ASOCIADA,
+                                    shape = RoundedCornerShape(6.dp),
+                                    shadowElevation = if (seleccionada) 6.dp else 2.dp
+                                ) {
+                                    Text(
+                                        text = optica.nombre,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.widthIn(max = 140.dp).padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(if (seleccionada) 18.dp else 14.dp)
+                                    .background(
+                                        when {
+                                            seleccionada -> MaterialTheme.colorScheme.primary
+                                            optica.verificada -> COLOR_ASOCIADA
+                                            else -> COLOR_OTRA
+                                        },
+                                        CircleShape
+                                    )
+                                    .border(2.dp, Color.White, CircleShape)
+                            )
+                        }
+                    }
+                }
+
+                // Centro: el usuario (GPS), el lugar buscado o la demostración
+                if (userCoords != null) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.align(Alignment.Center).semantics(mergeDescendants = true) {
+                            contentDescription = etiquetaCentro
+                        }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .background(if (esUbicacionSimulada) Color(0xFFB45309) else Color(0xFFC62828), CircleShape)
+                                .border(3.dp, Color.White, CircleShape)
+                        )
+                        Surface(
+                            color = if (esUbicacionSimulada) Color(0xFFB45309) else Color(0xFFC62828),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = etiquetaCentro,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Controles (48 dp, con descripción para TalkBack)
+            Column(
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                BotonMapa("+", "Acercar") { zoomLevel = (zoomLevel * 1.5f).coerceAtMost(ZOOM_MAX) }
+                BotonMapa("−", "Alejar") { zoomLevel = (zoomLevel / 1.5f).coerceAtLeast(ZOOM_MIN) }
+                BotonMapa(if (mapaExpandido) "▲" else "▼", if (mapaExpandido) "Hacer el mapa más chico" else "Hacer el mapa más grande") {
+                    mapaExpandido = !mapaExpandido
+                }
+                BotonMapa("◎", "Volver a mi ubicación") {
+                    zoomLevel = zoomInicial
+                    onCentrarUbicacion()
+                }
+            }
+        }
+
+        Text(
+            text = "Área mostrada: unos ${formatoDistancia(radioKm * 2)} de lado. Verde = asociada EYESOFTER, gris = otras ópticas.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
-/**
- * Coloca el elemento con su CENTRO en (x, y), en píxeles dentro del mapa.
- * Si se saldría por la izquierda o la derecha, lo recorre para que quepa
- * (con 8 px de margen). Funciona dentro de un Box que acomoda arriba a la izquierda.
- */
-private fun Modifier.centradoEn(x: Float, y: Float, anchoPx: Float): Modifier = layout { medible, restricciones ->
-    val p = medible.measure(restricciones.copy(minWidth = 0, minHeight = 0))
-    val izquierda = (x - p.width / 2f).coerceIn(8f, max(8f, anchoPx - p.width - 8f))
-    layout(p.width, p.height) {
-        p.place(izquierda.roundToInt(), (y - p.height / 2f).roundToInt())
+@Composable
+private fun BotonMapa(simbolo: String, descripcion: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = descripcion }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(simbolo, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
-/** Botón redondo blanco con borde fino para los controles del mapa. */
-@Composable
-private fun ControlMapa(simbolo: String, descripcion: String, activo: Boolean = false, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(if (activo) EyesColors.Celeste100 else EyesColors.Blanco)
-            .border(1.dp, EyesColors.Borde, CircleShape)
-            .clickable(onClickLabel = descripcion, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(simbolo, style = MaterialTheme.typography.titleMedium, color = EyesColors.Marino)
-    }
+/** Elige el zoom para que quepan las ~8 ópticas más cercanas. */
+private fun calcularZoomInicial(referencia: Coordenadas?, opticas: List<Optica>): Float {
+    if (referencia == null || opticas.isEmpty()) return 1f
+    val lejana = opticas
+        .map { distanciaKm(referencia.lat, referencia.lng, it.lat, it.lng) }
+        .sorted()
+        .take(8)
+        .last()
+        .coerceAtLeast(0.5)
+    return (RADIO_BASE_KM / (lejana * 1.2)).toFloat().coerceIn(ZOOM_MIN, ZOOM_MAX)
 }

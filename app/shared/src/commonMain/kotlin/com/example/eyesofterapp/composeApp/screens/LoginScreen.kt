@@ -1,11 +1,20 @@
 package com.example.eyesofterapp.composeApp.screens
 
+ feat/opticas-osm
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -108,12 +117,45 @@ fun LoginScreen(
         // Panel de arriba: las bandas diagonales de la web detrás del logo y el nombre.
         // Llega hasta el borde superior (detrás de la barra de estado).
         Box(
+ feat/opticas-osm
+            modifier = Modifier
+                .size(88.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                .semantics { contentDescription = "Logotipo de EYESOFTER" },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "E",
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "EYESOFTER Suite",
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text("Inicia sesión para continuar", style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(24.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp),
+            shape = RoundedCornerShape(20.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+
             modifier = Modifier.fillMaxWidth().height(340.dp),
             contentAlignment = Alignment.Center
         ) {
             // Animación de entrada (se ve una vez al abrir la app), en este orden:
             // bandas (fundido) → logo (rebote suave) → nombre → formulario.
             EyesBandas(Modifier.matchParentSize().aparecer(desplazamiento = 0.dp))
+          main
             Column(
                 modifier = Modifier.statusBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -167,22 +209,14 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Contraseña") },
-                singleLine = true,
-                isError = state.error != null,
-                shape = EyesShapes.Boton,
-                colors = coloresCampo,
-                // Solo cambia CÓMO se ve (puntos); el texto real sigue en "password"
-                visualTransformation = if (showPassword) VisualTransformation.None
-                else PasswordVisualTransformation(),
-                trailingIcon = {
-                    EyesBotonTexto(
-                        texto = if (showPassword) "Ocultar" else "Mostrar",
-                        onClick = { showPassword = !showPassword },
-                        color = EyesColors.Azul
+                // Solo aparece si el ViewModel puso un mensaje de error
+                state.error?.let { message ->
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        // TalkBack lee el error en cuanto aparece
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                     )
                 },
                 keyboardOptions = KeyboardOptions(
@@ -193,16 +227,20 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Solo aparece si el ViewModel puso un mensaje de error. Se despliega
-            // (en vez de aparecer de golpe) para que el botón no "salte" hacia abajo.
-            AnimatedVisibility(
-                visible = state.error != null,
-                enter = expandVertically(tween(EyesMotion.Entrada, easing = EyesMotion.EaseOut)) +
-                    fadeIn(tween(EyesMotion.Entrada, easing = EyesMotion.EaseOut)),
-                exit = shrinkVertically(tween(EyesMotion.Salida, easing = EyesMotion.EaseOut)) +
-                    fadeOut(tween(EyesMotion.Salida))
-            ) {
-                Text(text = state.error ?: "", color = EyesColors.RojoBg, style = MaterialTheme.typography.bodyMedium)
+                Button(
+                    onClick = { submit() },
+                    enabled = !state.isLoading, // evita doble clic mientras espera al servidor
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                ) {
+                    if (state.isLoading) {
+                        CircularProgressIndicator(
+                            Modifier.size(20.dp).semantics { contentDescription = "Iniciando sesión" },
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Iniciar sesión")
+                    }
+                }
             }
 
             Spacer(Modifier.height(4.dp))

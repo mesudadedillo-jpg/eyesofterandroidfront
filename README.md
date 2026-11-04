@@ -70,10 +70,18 @@ eyesofter-app/
 
 ### El sensor de ubicación
 
-- `LocationProvider` (común) define **qué** se pide: `obtenerUbicacion(): Coordenadas?`.
-- `AndroidLocationProvider` define **cómo** en Android: pide el permiso en
-  tiempo de ejecución, usa GPS o red, `getCurrentLocation` en Android 11+ y,
-  si no hay proveedor activo, usa el centro de Tulancingo (20.0825, -98.3622).
+- `LocationProvider` (común) define **qué** se pide: `obtenerUbicacion(): ResultadoUbicacion`,
+  que puede ser `Exito` (con coordenadas, precisión en metros y proveedor), `SinPermiso`,
+  `UbicacionApagada` o `SinSenal`. Ya **no** se inventan coordenadas: si el GPS falla, la
+  pantalla lo dice y solo usa Tulancingo cuando se marca como *GPS simulado*.
+- `AndroidLocationProvider` define **cómo** en Android (sin Google Play Services):
+  1. pide el permiso en tiempo de ejecución (basta FINE o COARSE),
+  2. revisa que la ubicación del teléfono esté encendida,
+  3. escucha **a la vez** los proveedores `fused` (Android 12+), `gps` y `network`;
+     gana la primera lectura con precisión ≤ 50 m, o la mejor que llegue en 20 s,
+  4. si no llega nada, usa la última ubicación conocida (máx. 1 hora de antigüedad).
+- Para depurar en un teléfono real: en Logcat filtra por la etiqueta **`GPS_DEBUG`**;
+  verás cada lectura con su proveedor y precisión.
 - `AndroidManifest.xml` declara `INTERNET`, `ACCESS_FINE_LOCATION`,
   `ACCESS_COARSE_LOCATION` y el GPS como **no obligatorio**.
 
@@ -162,3 +170,5 @@ catálogo local de respaldo con 8 ópticas.
 - `PantallaMapa.kt` usa `LocalLifecycleOwner` de un paquete obsoleto (advertencia de compilación).
 - `applicationId` es `com.example.eyesofterapp`; Google Play no acepta `com.example`.
 - iOS no se ha compilado desde la separación (requiere Mac).
+
+Verificación de subida mediante conexión SSH (2026-11-04 09:14)

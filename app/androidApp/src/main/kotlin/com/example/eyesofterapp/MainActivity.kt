@@ -11,14 +11,21 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +41,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.eyesofterapp.composeApp.theme.EyeSofterTheme
 import com.example.eyesofterapp.composeApp.theme.EyesColors
+import com.example.eyesofterapp.composeApp.theme.EyesMotion
 import com.example.eyesofterapp.composeApp.theme.EyesShapes
 import com.example.eyesofterapp.location.AndroidLocationProvider
 
@@ -132,29 +140,42 @@ class MainActivity : ComponentActivity() {
             // la paleta y la tipografía de EYESOFTER (antes quedaba con el estilo por defecto).
             EyeSofterTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (showMap) {
-                        PantallaMapa()
-                    } else {
-                        App(locationProvider = locationProvider)
-                    }
+                    // La app se queda SIEMPRE debajo: así, al cerrar el mapa, regresas
+                    // a la misma pantalla (Ópticas) con todo como lo dejaste.
+                    // El botón "Mapa en vivo" ahora está dentro de la pantalla de Ópticas.
+                    App(locationProvider = locationProvider, onAbrirMapaEnVivo = { showMap = true })
 
-                    // Botón flotante para cambiar entre la app y el mapa MapLibre:
-                    // píldora marino, plana (sin sombra), como las del resto de la app.
-                    FloatingActionButton(
-                        onClick = { showMap = !showMap },
-                        shape = EyesShapes.Pildora,
-                        containerColor = EyesColors.Marino,
-                        contentColor = EyesColors.Blanco,
-                        elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(16.dp, 16.dp, 16.dp, 100.dp)
+                    // El gesto o botón "Atrás" del teléfono cierra el mapa (solo mientras está abierto;
+                    // si no, "Atrás" funciona normal).
+                    BackHandler(enabled = showMap) { showMap = false }
+
+                    // Mapa real (MapLibre) encima, con fundido de entrada y salida.
+                    AnimatedVisibility(
+                        visible = showMap,
+                        enter = fadeIn(tween(EyesMotion.Pantalla, easing = EyesMotion.EaseOut)),
+                        exit = fadeOut(tween(EyesMotion.Salida))
                     ) {
-                        Text(
-                            if (showMap) "Volver a la app" else "Mapa en vivo",
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+                        Box(Modifier.fillMaxSize().background(EyesColors.Fondo)) {
+                            PantallaMapa()
+                            // "Volver" arriba a la izquierda: no choca con "Mi ubicación" (abajo a la derecha).
+                            FloatingActionButton(
+                                onClick = { showMap = false },
+                                shape = EyesShapes.Pildora,
+                                containerColor = EyesColors.Marino,
+                                contentColor = EyesColors.Blanco,
+                                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .statusBarsPadding()
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    "Volver a la app",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

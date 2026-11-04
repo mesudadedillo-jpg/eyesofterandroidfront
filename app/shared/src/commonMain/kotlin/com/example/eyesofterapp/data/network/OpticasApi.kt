@@ -9,11 +9,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
-import kotlin.math.acos
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
-import kotlin.math.sqrt
+import com.example.eyesofterapp.domain.model.distanciaHaversineKm
 
 class OpticasApi(private val client: HttpClient) {
 
@@ -120,18 +116,8 @@ class OpticasApi(private val client: HttpClient) {
         }
     }
 
-    private fun calcularHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0
-        val pi = kotlin.math.PI
-        val dLat = (lat2 - lat1) * pi / 180.0
-        val dLon = (lon2 - lon1) * pi / 180.0
-        val radLat1 = lat1 * pi / 180.0
-        val radLat2 = lat2 * pi / 180.0
-
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(radLat1) * cos(radLat2) *
-                sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * acos(min(1.0, sqrt(a)))
-        return r * c
-    }
+    // Usa la fórmula compartida (domain/model/Coordenadas.kt). Antes aquí había
+    // una copia con acos en lugar de asin, que daba distancias incorrectas.
+    private fun calcularHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double =
+        distanciaHaversineKm(lat1, lon1, lat2, lon2)
 }

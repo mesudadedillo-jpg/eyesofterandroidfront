@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,6 +53,7 @@ import com.example.eyesofterapp.composeApp.theme.EyesSelectorOpcion
 import com.example.eyesofterapp.composeApp.theme.EyesShapes
 import com.example.eyesofterapp.composeApp.theme.EyesTarjeta
 import com.example.eyesofterapp.composeApp.theme.EyesTarjetaAcento
+import com.example.eyesofterapp.composeApp.theme.aparecer
 import com.example.eyesofterapp.domain.model.Optica
 import com.example.eyesofterapp.ui.OpticasUiState
 import kotlin.math.roundToLong
@@ -65,7 +65,8 @@ fun OpticasScreen(
     onSimularUbicacion: () -> Unit = {},
     onBuscarPorCiudad: (String) -> Unit,
     onActualizarBusquedaTexto: (String) -> Unit,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onAbrirMapaEnVivo: (() -> Unit)? = null
 ) {
     var vistaModoMapa by remember { mutableStateOf(true) }
     var opticaSeleccionada by remember { mutableStateOf<Optica?>(null) }
@@ -89,19 +90,33 @@ fun OpticasScreen(
     Column(Modifier.fillMaxSize().background(EyesColors.Fondo)) {
         EyesBarraSuperior(accion = "Volver", onAccion = onVolver)
 
+        // Toda la pantalla se desplaza como UNA sola página. Antes estaba partida en
+        // dos zonas (controles arriba y mapa abajo) que se repartían la altura, y el
+        // mapa terminaba cortando los filtros.
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Parte de arriba con controles: se desplaza si no cabe y solo ocupa lo necesario
             Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Ópticas cercanas", style = MaterialTheme.typography.headlineMedium, color = EyesColors.Texto)
+                // Título + acceso al mapa real (MapLibre). Antes era un botón flotante que
+                // tapaba el contenido en todas las pantallas; ahora vive solo aquí.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Ópticas cercanas", style = MaterialTheme.typography.headlineMedium, color = EyesColors.Texto)
+                    if (onAbrirMapaEnVivo != null) {
+                        EyesBotonFantasma("Mapa en vivo", onClick = onAbrirMapaEnVivo)
+                    }
+                }
 
                 if (state.mostrandoCache) {
                     EyesTarjetaAcento(fondo = EyesColors.AmarilloBg, modifier = Modifier.fillMaxWidth()) {
@@ -261,7 +276,7 @@ fun OpticasScreen(
 
             if (!state.cargando && opticasFiltradas.isEmpty() && state.error == null) {
                 Box(
-                    modifier = Modifier.fillMaxWidth().weight(1f).padding(32.dp),
+                    modifier = Modifier.fillMaxWidth().padding(32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
@@ -279,7 +294,7 @@ fun OpticasScreen(
                         fadeIn(tween(EyesMotion.Pantalla, easing = EyesMotion.EaseOut))
                             .togetherWith(fadeOut(tween(EyesMotion.Salida)))
                     },
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     label = "mapaLista"
                 ) { mostrarMapa ->
                     if (mostrarMapa) {
@@ -293,18 +308,21 @@ fun OpticasScreen(
                             onSimularUbicacion = onSimularUbicacion
                         )
                     } else {
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(opticasFiltradas) { optica ->
-                                OpticaCard(
-                                    optica = optica,
-                                    onClick = {
-                                        opticaSeleccionada = optica
-                                        vistaModoMapa = true
+                        // Column normal (no LazyColumn): la página entera ya se desplaza y
+                        // el catálogo es corto. Las tarjetas entran escalonadas.
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            opticasFiltradas.forEachIndexed { i, optica ->
+                                key(optica.id) {
+                                    Box(Modifier.aparecer(indice = i.coerceAtMost(6))) {
+                                        OpticaCard(
+                                            optica = optica,
+                                            onClick = {
+                                                opticaSeleccionada = optica
+                                                vistaModoMapa = true
+                                            }
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }

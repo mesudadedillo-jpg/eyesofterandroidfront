@@ -30,7 +30,8 @@ fun AppNavHost(
     container: AppContainer,
     state: AuthUiState,
     onLogin: (String, String) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onAbrirMapaEnVivo: (() -> Unit)? = null
 ) {
     val screenPorRol: Screen = state.session?.user?.toScreen() ?: Screen.Login
     var currentScreen by remember(screenPorRol) { mutableStateOf(screenPorRol) }
@@ -66,7 +67,8 @@ fun AppNavHost(
                 onSimularUbicacion = { opticasViewModel.simularUbicacionReal() },
                 onBuscarPorCiudad = { query -> opticasViewModel.buscarPorCiudadOZip(query) },
                 onActualizarBusquedaTexto = { texto -> opticasViewModel.actualizarBusquedaTexto(texto) },
-                onVolver = { currentScreen = current.user.toScreen() }
+                onVolver = { currentScreen = current.user.toScreen() },
+                onAbrirMapaEnVivo = onAbrirMapaEnVivo
             )
         }
     }

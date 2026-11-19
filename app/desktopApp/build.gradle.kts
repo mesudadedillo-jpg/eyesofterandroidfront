@@ -26,3 +26,12 @@ compose.desktop {
         }
     }
 }
+// Capturas de las pantallas con datos de ejemplo (ver capturas/Capturas.kt).
+tasks.register<JavaExec>("capturas") {
+    group = "documentation"
+    description = "Genera PNG de las pantallas en build/capturas/"
+    mainClass.set("com.example.eyesofterapp.capturas.CapturasKt")
+    classpath = sourceSets["main"].runtimeClasspath
+    args(layout.buildDirectory.dir("capturas").get().asFile.absolutePath)
+    systemProperty("java.awt.headless", "true")
+}

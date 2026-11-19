@@ -66,12 +66,12 @@ fun OpticasScreen(
     onBuscarPorCiudad: (String) -> Unit,
     onActualizarBusquedaTexto: (String) -> Unit,
     onVolver: () -> Unit,
-    onAbrirMapaEnVivo: (() -> Unit)? = null
+    soloAsociadasInicial: Boolean = false,
 ) {
     var vistaModoMapa by remember { mutableStateOf(true) }
     var opticaSeleccionada by remember { mutableStateOf<Optica?>(null) }
     var filtroDistanciaMaxKm by remember { mutableStateOf<Double?>(null) }
-    var filtroVerificadas by remember { mutableStateOf<Boolean?>(null) }
+    var filtroVerificadas by remember { mutableStateOf<Boolean?>(if (soloAsociadasInicial) true else null) }
 
     LaunchedEffect(Unit) {
         if (state.opticas.isEmpty() && state.error == null && !state.cargando) {
@@ -84,7 +84,7 @@ fun OpticasScreen(
             val cumpleDistancia = filtroDistanciaMaxKm == null || optica.distanciaKm <= filtroDistanciaMaxKm!!
             val cumpleVerificada = filtroVerificadas == null || optica.verificada == filtroVerificadas!!
             cumpleDistancia && cumpleVerificada
-        }
+        }.ordenDirectorio()
     }
 
     Column(Modifier.fillMaxSize().background(EyesColors.Fondo)) {
@@ -113,9 +113,6 @@ fun OpticasScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Ópticas cercanas", style = MaterialTheme.typography.headlineMedium, color = EyesColors.Texto)
-                    if (onAbrirMapaEnVivo != null) {
-                        EyesBotonFantasma("Mapa en vivo", onClick = onAbrirMapaEnVivo)
-                    }
                 }
 
                 if (state.mostrandoCache) {
@@ -331,6 +328,13 @@ fun OpticasScreen(
         }
     }
 }
+
+/**
+ * Orden del directorio (M-RFN-07): primero las clínicas asociadas al programa y,
+ * dentro de cada grupo, de la más cercana a la más lejana (0.0 = sin distancia, al final).
+ */
+fun List<Optica>.ordenDirectorio(): List<Optica> =
+    sortedWith(compareByDescending<Optica> { it.verificada }.thenBy { if (it.distanciaKm > 0.0) it.distanciaKm else Double.MAX_VALUE })
 
 /** Coordenada con 4 decimales (unos 11 m de precisión), por ejemplo 20.0825. */
 private fun Double.cuatroDecimales(): String = ((this * 10_000).roundToLong() / 10_000.0).toString()

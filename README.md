@@ -1,9 +1,17 @@
 # EYESOFTER Suite — App (Kotlin Multiplatform)
 
 App móvil de **EYESOFTER Suite**, el proyecto escolar de tamizaje visual para la
-Escuela Primaria-Secundaria METANOIA (Tulancingo, Hgo.). Permite iniciar sesión
-según el rol del usuario y buscar ópticas cercanas con el GPS del teléfono y un
-mapa (MapLibre).
+Escuela Primaria-Secundaria METANOIA (Tulancingo, Hgo.).
+
+| Rol | Qué puede hacer |
+|---|---|
+| **Tutor** (`CLIENTE`) | Ver el resultado de la revisión visual de sus hijos (semáforo con color, ícono y texto, en lenguaje claro), saber qué hacer, buscar una clínica asociada en el mapa 3D y subir la foto de la receta o del comprobante de lentes |
+| **Enfermería** (`SUPERVISOR`) y **Dirección** (`ADMINISTRADOR`) | Ver qué familias ya leyeron su resultado, revisar (aprobar/rechazar) comprobantes y mandar avisos a los tutores |
+| **Alumno** | Pausa 20-20-20 con vibración y sonido, y ejercicios guiados para los ojos |
+| **Especialista** (`DOCTOR`) | Directorio de clínicas (el escaneo del pase QR está pendiente) |
+
+Todos tienen la bandeja de notificaciones (con globito de pendientes) y el directorio de clínicas.
+La sesión se guarda en el teléfono: no hay que escribir la contraseña cada vez.
 
 - **Repositorio:** `https://github.com/mesudadedillo-jpg/eyesofterandroidfront`
 - **Servidor que usa:** proyecto `eyesofter-backend`, repositorio
@@ -18,7 +26,7 @@ despliegue por su cuenta. Ahora se comunican **solo por HTTP**.
 ## Tecnologías
 
 Kotlin 2.4.20 · Compose Multiplatform 1.12.1 · Ktor Client 3.6.0 ·
-AGP 9.1.1 · MapLibre 11.6.1 · Gradle 9.5.1
+AGP 9.1.1 · MapLibre 11.6.1 (mapas de OpenFreeMap) · Gradle 9.5.1
 
 Android: `compileSdk 37`, `targetSdk 36`, `minSdk 24`.
 **`targetSdk` se dejó en 36 a propósito** por el permiso de red local de
@@ -40,10 +48,13 @@ eyesofter-app/
     │       ├── commonMain/kotlin/com/example/eyesofterapp/
     │       │   ├── App.kt, AppContainer.kt   Pantalla raíz y creación de objetos (API, ViewModels)
     │       │   ├── composeApp/
-    │       │   │   ├── navigation/           Rutas entre pantallas (AppNavHost, Screen)
-    │       │   │   ├── screens/              LoginScreen, RoleScreens, OpticasScreen, MapaOpticasView
-    │       │   │   └── theme/                Colores y tipografía
-    │       │   ├── ui/                       ViewModels y estados (AuthViewModel, OpticasViewModel…)
+    │       │   │   ├── navigation/           Pila de pantallas (AppNavHost) y Screen; "Atrás" regresa
+    │       │   │   ├── screens/              Login, Inicio (un panel por rol), Notificaciones, Tamizaje,
+    │       │   │   │                         PersonalScreens (comprobantes, seguimiento, avisos),
+    │       │   │   │                         PausaVisual (20-20-20), Opticas + MapaOpticasView (mapa ilustrado)
+    │       │   │   └── theme/                Colores, tipografía, componentes, íconos (EyesIconos), semáforo (EyesPiezas)
+    │       │   ├── ui/                       ViewModels: AuthViewModel (sesión), PanelViewModel (datos del rol), OpticasViewModel
+    │       │   ├── plataforma/Telefono.kt    Lo que se pide al teléfono: cámara, archivos, vibración, sonido
     │       │   ├── domain/                   Reglas del negocio sin red ni pantallas
     │       │   │   ├── model/                Session, User, Role, Optica, Coordenadas
     │       │   │   ├── repository/           Interfaz AuthRepository
@@ -53,20 +64,61 @@ eyesofter-app/
     │       │   │   │   ├── PlatformConfig.kt   ← BASE_URL (URL del servidor)
     │       │   │   │   ├── HttpClientFactory.kt  Ktor Client con JSON, timeouts y logs
     │       │   │   │   ├── AuthApi.kt          POST /api/login
+    │       │   │   │   ├── EyesApi.kt          Rutas con sesión (Bearer): notificaciones, tamizajes, comprobantes…
     │       │   │   │   ├── OpticasApi.kt       GET /opticas/cercanas y /salud (+ catálogo de respaldo)
     │       │   │   │   └── ResultadoRed.kt     Resultado tipado: Exito, Timeout, SinConexion…
     │       │   │   ├── model/AuthDtos.kt     Copia del contrato del login
+    │       │   │   ├── model/EyesDtos.kt     Copia del contrato de notificaciones, tamizajes y comprobantes
+    │       │   │   ├── session/              SesionGuardada: token y usuario en el teléfono
     │       │   │   ├── repository/           AuthRepositoryImpl
     │       │   │   └── cache/                DiskOpticasCache (última lista de ópticas)
     │       │   └── location/LocationProvider.kt  Interfaz común del GPS: obtenerUbicacion()
     │       ├── androidMain/   AndroidLocationProvider (LocationManager, GPS o red)
     │       ├── iosMain/ jsMain/ jvmMain/ wasmJsMain/   Código propio de cada plataforma
     │       └── commonTest/    AuthRepositoryTest
-    ├── androidApp/            Entrada Android: MainActivity, PantallaMapa (MapLibre), AndroidManifest
-    ├── desktopApp/            Entrada de escritorio (Windows/Mac/Linux)
+    ├── androidApp/            Entrada Android: MainActivity, DirectorioMapa (mapa 3D), TelefonoAndroid, AndroidManifest
+    ├── desktopApp/            Entrada de escritorio + capturas/Capturas.kt (genera PNG de las pantallas)
     ├── webApp/                Entrada web (JS y Wasm)
     └── iosApp/                Proyecto de Xcode (solo se compila en Mac)
 ```
+
+### El mapa del directorio (Android)
+
+`androidApp/.../DirectorioMapa.kt`, con MapLibre y el estilo gratuito de
+OpenFreeMap (no necesita API key):
+
+- **3D:** arranca inclinado a 60° y girado. Con dos dedos se gira (rotar) y se
+  inclina (deslizar hacia arriba o abajo). Los edificios que tiene OpenStreetMap
+  salen en relieve, y cada clínica tiene una **columna 3D translúcida**: alta y
+  verde si está asociada al programa, más baja y azul si es externa.
+- **Pines propios:** verde con palomita = asociada; azul = externa; gris =
+  óptica encontrada en OpenStreetMap cerca de ti. El pin elegido crece. Los
+  nombres aparecen al acercarse.
+- **Tarjetas abajo:** se deslizan de lado; al cambiar de tarjeta la cámara
+  "vuela" a esa clínica. Tocar un pin lleva a su tarjeta. Cada tarjeta tiene
+  distancia, dirección, **Cómo llegar** (Google Maps) y **Llamar**.
+- **Orden:** primero las asociadas y luego por cercanía (M-RFN-07).
+- **Controles:** 2D/3D, brújula (vuelve al norte), acercar, alejar y mi ubicación.
+- **Filtros y búsqueda:** Todas / Asociadas / A menos de 5 km, y búsqueda por
+  ciudad, colonia o C.P. También hay vista de **Lista**.
+- **Sin permiso de ubicación** el mapa funciona igual, centrado en Tulancingo,
+  con un aviso para activarla (M-RFNN-05).
+
+En escritorio y web se usa el mapa ilustrado de `MapaOpticasView` (sin MapLibre).
+
+### Acceso al teléfono
+
+| Qué | Para qué | Cómo (Android) | Permiso |
+|---|---|---|---|
+| Ubicación | Clínicas cercanas | `AndroidLocationProvider` | Se pide al abrir el directorio |
+| Cámara | Fotografiar la receta o el comprobante (M-RI-04) | La app de cámara del teléfono (`TakePicture` + FileProvider) | Ninguno |
+| Archivos | Elegir una foto o PDF ya guardado | Selector del sistema (`OpenDocument`) | Ninguno |
+| Vibración y sonido | Aviso de la pausa 20-20-20 (M-RI-06) | `Vibrator`, `RingtoneManager` | `VIBRATE` (no se pregunta) |
+| Pantalla encendida | Mientras corre la pausa o un ejercicio | `FLAG_KEEP_SCREEN_ON` | Ninguno |
+
+Las fotos se reducen a 1600 px y JPEG 80 % antes de subirse (M-RC-05). Las
+notificaciones push (Firebase) están pendientes; mientras, la app revisa la
+bandeja al iniciar sesión y cada minuto con la app abierta.
 
 ### El sensor de ubicación
 
@@ -126,6 +178,15 @@ Lat `20.0825`, Lng `-98.3622` → **Set Location**.
 ./gradlew :app:shared:jvmTest
 ```
 
+### Capturas de las pantallas
+
+Genera un PNG de cada pantalla con datos de ejemplo (sin emulador) en
+`app/desktopApp/build/capturas/`:
+
+```bash
+./gradlew :app:desktopApp:capturas
+```
+
 ## Cómo se conecta con el servidor
 
 Toda la app usa **una sola URL**, definida en
@@ -156,9 +217,11 @@ catálogo local de respaldo con 8 ópticas.
 
 ## Pendientes conocidos
 
-- `OpticasApi.calcularHaversine` usa `acos` donde la fórmula lleva `asin`: en
-  el catálogo de respaldo las distancias salen mal y el orden queda invertido.
-  (El servidor ya lo calcula bien.)
-- `PantallaMapa.kt` usa `LocalLifecycleOwner` de un paquete obsoleto (advertencia de compilación).
+- **Notificaciones push con Firebase** (ver la tabla al final de `docs/API.md`):
+  falta crear el proyecto de Firebase, agregar `google-services.json` y registrar
+  el token del teléfono en el servidor.
+- La pausa 20-20-20 solo corre con la app abierta (no hay servicio en segundo plano).
+- Escaneo del pase médico con QR para el especialista (el servidor tampoco lo tiene aún).
 - `applicationId` es `com.example.eyesofterapp`; Google Play no acepta `com.example`.
-- iOS no se ha compilado desde la separación (requiere Mac).
+- iOS no se ha compilado desde la separación (requiere Mac). En iOS no hay `Telefono`
+  todavía: se ocultan los botones de cámara.

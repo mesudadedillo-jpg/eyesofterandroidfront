@@ -15,7 +15,7 @@ sealed interface ResultadoRed<out T> {
         is ServidorInalcanzable -> "No se puede conectar al servidor ($url). Revisa que esté encendido."
         is Timeout -> "El servidor tardó demasiado en responder ($url)."
         is ErrorServidor -> "Error interno en el servidor ($codigo)."
-        is ErrorCliente -> "Usuario o contraseña incorrectos."
+        is ErrorCliente -> mensaje
         is Desconocido -> "Error inesperado: ${excepcion.message ?: "Sin detalles"}"
     }
 }

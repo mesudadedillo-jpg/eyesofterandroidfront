@@ -55,7 +55,7 @@ class AndroidLocationProvider(
                 val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 
                 if (!isGpsEnabled && !isNetworkEnabled) {
-                    continuation.resume(Coordenadas(20.0825, -98.3622)) // Default
+                    continuation.resume(null) // GPS y red apagados
                     return@suspendCancellableCoroutine
                 }
 
@@ -80,7 +80,7 @@ class AndroidLocationProvider(
             } catch (e: SecurityException) {
                 continuation.resume(null)
             } catch (e: Exception) {
-                continuation.resume(Coordenadas(20.0825, -98.3622))
+                continuation.resume(null)
             }
         }
     }
@@ -92,7 +92,7 @@ class AndroidLocationProvider(
             if (lastLocation != null) {
                 continuation.resume(Coordenadas(lastLocation.latitude, lastLocation.longitude))
             } else {
-                continuation.resume(Coordenadas(20.0825, -98.3622)) // Default fallback
+                continuation.resume(null) // Sin ubicación conocida: el ViewModel usa Tulancingo y lo marca como aproximada
             }
         } catch (e: SecurityException) {
             continuation.resume(null)

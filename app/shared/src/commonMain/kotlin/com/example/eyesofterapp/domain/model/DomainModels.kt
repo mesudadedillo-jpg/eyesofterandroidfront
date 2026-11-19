@@ -24,3 +24,6 @@ data class Session(
 )
 
 class InvalidCredentialsException : Exception("Usuario o contraseña incorrectos")
+
+/** El servidor rechazó la petición con un motivo que se le muestra al usuario tal cual (p. ej. cuenta bloqueada). */
+class RechazoDelServidorException(mensaje: String) : Exception(mensaje)

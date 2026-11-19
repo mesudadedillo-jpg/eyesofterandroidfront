@@ -1,5 +1,6 @@
 package com.example.eyesofterapp.data.network
 
+import com.example.eyesofterapp.data.model.ErrorDto
 import com.example.eyesofterapp.data.model.LoginRequestDto
 import com.example.eyesofterapp.data.model.LoginResponseDto
 import io.ktor.client.HttpClient
@@ -42,7 +43,9 @@ class AuthApi(private val client: HttpClient) {
                     ResultadoRed.ErrorCliente(401, "Usuario o contraseña incorrectos")
                 }
                 response.status.value in 400..499 -> {
-                    ResultadoRed.ErrorCliente(response.status.value, "Datos de solicitud inválidos")
+                    // 429 = cuenta bloqueada por intentos fallidos: el servidor dice cuántos minutos faltan.
+                    val mensaje = try { response.body<ErrorDto>().error } catch (_: Exception) { "" }
+                    ResultadoRed.ErrorCliente(response.status.value, mensaje.ifBlank { "Datos de solicitud inválidos" })
                 }
                 else -> {
                     ResultadoRed.ErrorServidor(response.status.value, "Error en el servidor de autenticación")

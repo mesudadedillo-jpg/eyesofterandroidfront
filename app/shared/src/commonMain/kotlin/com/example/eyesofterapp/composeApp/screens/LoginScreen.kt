@@ -40,6 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
+import com.example.eyesofterapp.data.network.URL_PORTAL
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -155,12 +157,12 @@ fun LoginScreen(
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Usuario") },
+                label = { Text("Correo electrónico") },
                 singleLine = true,
                 isError = state.error != null,
                 shape = EyesShapes.Boton,
                 colors = coloresCampo,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(
                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                 ),
@@ -215,6 +217,28 @@ fun LoginScreen(
                 cargando = state.isLoading,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // C-RFNN-02: la recuperación la hace el portal (manda el enlace al correo registrado).
+            val uri = LocalUriHandler.current
+            EyesBotonTexto(
+                texto = "¿Olvidaste tu contraseña?",
+                onClick = { uri.openUri("$URL_PORTAL/Cuenta/Olvide") },
+                color = EyesColors.Azul,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
+
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Tu cuenta te la da la escuela. Es la misma del portal web.",
+            style = MaterialTheme.typography.bodySmall, color = EyesColors.TextoTenue,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+        val uriPie = LocalUriHandler.current
+        androidx.compose.foundation.layout.Row {
+            EyesBotonTexto("Aviso de privacidad", onClick = { uriPie.openUri("$URL_PORTAL/Privacidad/Aviso") })
+            EyesBotonTexto("Ayuda", onClick = { uriPie.openUri("$URL_PORTAL/Soporte/Ayuda") })
+        }
+        Spacer(Modifier.height(16.dp))
     }
 }

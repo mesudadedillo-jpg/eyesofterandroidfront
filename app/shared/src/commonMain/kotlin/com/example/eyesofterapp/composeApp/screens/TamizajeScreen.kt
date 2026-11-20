@@ -61,6 +61,8 @@ fun TamizajeScreen(
     state: PanelUiState,
     onSubir: (tamizajeId: String, tipo: String, archivo: ArchivoElegido) -> Unit,
     onBuscarClinica: () -> Unit,
+    onElegirDestino: (tamizajeId: String) -> Unit,
+    onSolicitarCita: (tamizajeId: String) -> Unit,
     onMensajeVisto: () -> Unit,
     onVolver: () -> Unit,
 ) {
@@ -80,6 +82,7 @@ fun TamizajeScreen(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                BannerSinConexion(state)
                 // Encabezado con el color del resultado.
                 Column(
                     Modifier.fillMaxWidth().clip(EyesShapes.Tarjeta).background(info.fondo).padding(24.dp).aparecer(0),
@@ -119,12 +122,14 @@ fun TamizajeScreen(
                     }
                     if (t.semaforo.uppercase() != "VERDE") {
                         Spacer(Modifier.height(4.dp))
-                        EyesBotonPrincipal("Buscar clínica asociada", onClick = onBuscarClinica, modifier = Modifier.fillMaxWidth())
+                        EyesBotonFantasma("Ver clínicas en el mapa", onClick = onBuscarClinica, modifier = Modifier.fillMaxWidth())
                     }
                 }
 
-                if (t.semaforo.uppercase() != "VERDE") {
-                    SubirComprobante(t.id, state, onSubir, Modifier.aparecer(3))
+                val caso = t.caso
+                if (caso != null) {
+                    SeguimientoDelCaso(t, caso, state, onElegirDestino = { onElegirDestino(t.id) }, onSolicitarCita = { onSolicitarCita(t.id) })
+                    if (!caso.cerrado) SubirComprobante(t.id, state, onSubir, Modifier.aparecer(3))
                 }
                 Text(
                     "Este reporte es preventivo y no sustituye la consulta con un especialista.",

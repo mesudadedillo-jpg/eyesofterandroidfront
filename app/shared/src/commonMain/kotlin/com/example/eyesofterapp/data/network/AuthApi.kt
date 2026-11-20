@@ -40,7 +40,7 @@ class AuthApi(private val client: HttpClient) {
                     ResultadoRed.Exito(response.body<LoginResponseDto>())
                 }
                 response.status == HttpStatusCode.Unauthorized -> {
-                    ResultadoRed.ErrorCliente(401, "Usuario o contraseña incorrectos")
+                    ResultadoRed.ErrorCliente(401, "Correo o contraseña incorrectos")
                 }
                 response.status.value in 400..499 -> {
                     // 429 = cuenta bloqueada por intentos fallidos: el servidor dice cuántos minutos faltan.

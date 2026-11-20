@@ -21,7 +21,9 @@ class SesionGuardada(private val settings: Settings = Settings()) {
             user = User(
                 username = usuario,
                 fullName = settings.getString(NOMBRE, usuario),
-                role = Role.fromString(settings.getString(ROL, ""))
+                role = Role.fromString(settings.getString(ROL, "")),
+                id = settings.getString(ID, ""),
+                requiereConsentimiento = settings.getBoolean(CONSENTIMIENTO, false),
             )
         )
     }
@@ -31,10 +33,15 @@ class SesionGuardada(private val settings: Settings = Settings()) {
         settings.putString(USUARIO, sesion.user.username)
         settings.putString(NOMBRE, sesion.user.fullName)
         settings.putString(ROL, sesion.user.role.name)
+        settings.putString(ID, sesion.user.id)
+        settings.putBoolean(CONSENTIMIENTO, sesion.user.requiereConsentimiento)
     }
 
+    /** El tutor aceptó el aviso de privacidad: no volver a pedirlo al abrir la app. */
+    fun consentimientoAceptado() = settings.putBoolean(CONSENTIMIENTO, false)
+
     fun borrar() {
-        listOf(TOKEN, USUARIO, NOMBRE, ROL).forEach { settings.remove(it) }
+        listOf(TOKEN, USUARIO, NOMBRE, ROL, ID, CONSENTIMIENTO).forEach { settings.remove(it) }
     }
 
     private companion object {
@@ -42,5 +49,7 @@ class SesionGuardada(private val settings: Settings = Settings()) {
         const val USUARIO = "sesion_usuario"
         const val NOMBRE = "sesion_nombre"
         const val ROL = "sesion_rol"
+        const val ID = "sesion_id"
+        const val CONSENTIMIENTO = "sesion_requiere_consentimiento"
     }
 }

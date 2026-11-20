@@ -6,6 +6,17 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import com.example.eyesofterapp.composeApp.navigation.Screen
 import com.example.eyesofterapp.composeApp.screens.ComprobantesScreen
+import com.example.eyesofterapp.composeApp.screens.ConsentimientoScreen
+import com.example.eyesofterapp.composeApp.screens.ElegirDestinoScreen
+import com.example.eyesofterapp.composeApp.screens.GuiaScreen
+import com.example.eyesofterapp.composeApp.screens.ReportarScreen
+import com.example.eyesofterapp.composeApp.screens.SolicitarCitaScreen
+import com.example.eyesofterapp.data.model.CasoDto
+import com.example.eyesofterapp.data.model.CitaDto
+import com.example.eyesofterapp.data.model.ClinicaDto
+import com.example.eyesofterapp.data.model.ConsentimientoDto
+import com.example.eyesofterapp.data.model.EventoDto
+import com.example.eyesofterapp.data.model.PaseDto
 import com.example.eyesofterapp.composeApp.screens.InicioScreen
 import com.example.eyesofterapp.composeApp.screens.LoginScreen
 import com.example.eyesofterapp.composeApp.screens.NotificacionesScreen
@@ -45,10 +56,23 @@ import java.io.File
 fun main(args: Array<String>) {
     val salida = File(args.firstOrNull() ?: "build/capturas").apply { mkdirs() }
 
-    val tutor = User("cliente", "María Hernández", Role.CLIENTE)
-    val enfermeria = User("enfermeria", "Laura Pérez", Role.SUPERVISOR)
-    val alumno = User("alumno", "Diego Ramírez", Role.ALUMNO)
-    val t1 = TamizajeDto("t1", "F-2026-001", "Ana López Hernández", "3", "B", "2026-11-18", "AMARILLO", "En observación", "Entrecierra los ojos para ver el pizarrón.")
+    val tutor = User("tutor@eyesofter.mx", "María Hernández", Role.CLIENTE)
+    val enfermeria = User("enfermeria@eyesofter.mx", "Laura Pérez", Role.SUPERVISOR)
+    val alumno = User("alumno@eyesofter.mx", "Diego Ramírez", Role.ALUMNO)
+    val especialista = User("especialista@eyesofter.mx", "Dra. Ruiz", Role.DOCTOR)
+    val eventos = listOf(
+        EventoDto("2026-11-18", "TAMIZAJE", "Tamizaje Snellen (escritorio): OD 20/40, OI 20/30. Semáforo Amarillo."),
+        EventoDto("2026-11-18", "AVISO_TUTOR", "Se notificó el resultado al tutor por la app y el portal."),
+        EventoDto("2026-11-19", "DESTINO", "Destino: Óptica Tulancingo Centro (asociada). Se generó el pase médico con QR."),
+        EventoDto("2026-11-19", "CITA", "El tutor solicitó cita en Óptica Tulancingo Centro para el 2026-11-25 (desde la app)."),
+    )
+    val pase = PaseDto("K7M2Q9XRT4HW8NBC3PZD6FJYEA", "K7M2 Q9XR T4HW 8NBC 3PZD 6FJY EA", "VIGENTE", "2026-11-19T16:00:00Z", "2027-01-18T16:00:00Z",
+        null, 1, "Óptica Tulancingo Centro", "Av. Juárez 102, Centro", "7757531234", "https://portal/Pases/Validar?codigo=K7M2Q9XRT4HW8NBC3PZD6FJYEA")
+    val casoConPase = CasoDto(5, "EYS-2026-0003", "EN_SEGUIMIENTO", true, 1, "Óptica Tulancingo Centro", true, pase,
+        citas = listOf(CitaDto(3, "Óptica Tulancingo Centro", "2026-11-25", "MANANA", null, "SOLICITADA")), eventos = eventos)
+    val casoSinDestino = CasoDto(5, "EYS-2026-0003", "ABIERTO", eventos = eventos.take(2))
+    val casoResumen = CasoDto(5, "EYS-2026-0003", "EN_SEGUIMIENTO", true, null, "Óptica Mi Barrio", false, eventos = eventos.take(2))
+    val t1 = TamizajeDto("t1", "F-2026-001", "Ana López Hernández", "3", "B", "2026-11-18", "AMARILLO", "En observación", "Entrecierra los ojos para ver el pizarrón.", caso = casoSinDestino)
     val t2 = TamizajeDto("t2", "F-2025-114", "Ana López Hernández", "2", "B", "2025-11-10", "VERDE", "Saludable")
     val notis = listOf(
         NotificacionDto("n1", "RESULTADO_TAMIZAJE", "Resultado del tamizaje visual", "Ya está disponible el resultado del tamizaje visual de Ana López. Tócala para verlo.", mapOf("ruta" to "tamizaje/t1"), "2026-11-18T15:00:00Z"),
@@ -65,6 +89,16 @@ fun main(args: Array<String>) {
         SeguimientoDto("n5", "tutor9", "Sofía Cruz", "t9", "2026-11-12T15:00:00Z", "2026-11-12T20:00:00Z", 0, listOf("correo")),
     )
     val panelTutor = PanelUiState(bandeja = BandejaDto(1, notis), tamizajes = listOf(t1, t2), comprobantes = comprobantes)
+    val qr = System.getenv("QR_PNG")?.let { File(it).takeIf { f -> f.exists() }?.readBytes() }
+    val conPase = panelTutor.copy(tamizajes = listOf(t1.copy(caso = casoConPase), t2), pases = qr?.let { mapOf(pase.codigo to it) } ?: emptyMap())
+    val conResumen = panelTutor.copy(tamizajes = listOf(t1.copy(caso = casoResumen), t2), sinConexion = true, actualizadoEn = "2026-11-19T18:00:00Z")
+    val clinicas = listOf(
+        ClinicaDto(1, "Óptica Tulancingo Centro", "Optica", "Av. Juárez 102, Centro", "Tulancingo", "43600", "7757531234", asociada = true),
+        ClinicaDto(5, "Centro Oftalmológico Hidalgo", "Oftalmologia", "Blvd. Felipe Ángeles 300", "Tulancingo", asociada = true),
+        ClinicaDto(2, "Optometría Visión Real", "Optica", "Calle Morelos 45", "Tulancingo"),
+        ClinicaDto(4, "Consultorio Dr. Pérez", "Consultorio", "Calle Hidalgo 9", "Tulancingo"),
+    )
+    val conDirectorio = panelTutor.copy(clinicas = clinicas, tamizajes = listOf(t1.copy(caso = casoConPase)))
     val panelEnf = PanelUiState(bandeja = BandejaDto(2, notis), seguimiento = seguimiento, comprobantes = comprobantes)
     val opticas = OpticasUiState(
         opticas = listOf(
@@ -87,9 +121,23 @@ fun main(args: Array<String>) {
         "02-inicio-tutor" to { InicioScreen(tutor, panelTutor, {}, {}, {}) },
         "03-resultado-amarillo" to {
             CompositionLocalProvider(LocalTelefono provides telefonoFalso) {
-                TamizajeScreen("t1", panelTutor, { _, _, _ -> }, {}, {}, {})
+                TamizajeScreen("t1", panelTutor, { _, _, _ -> }, {}, {}, {}, {}, {})
             }
         },
+        "12-pase-medico-qr" to {
+            CompositionLocalProvider(LocalTelefono provides telefonoFalso) {
+                TamizajeScreen("t1", conPase, { _, _, _ -> }, {}, {}, {}, {}, {})
+            }
+        },
+        "13-resumen-sin-conexion" to { TamizajeScreen("t1", conResumen, { _, _, _ -> }, {}, {}, {}, {}, {}) },
+        "14-elegir-clinica" to { ElegirDestinoScreen("t1", conDirectorio, {}, { _, _, _ -> }, {}, {}) },
+        "15-pedir-cita" to { SolicitarCitaScreen("t1", conDirectorio, {}, { _, _ -> }, {}, {}) },
+        "16-aviso-privacidad" to {
+            ConsentimientoScreen(PanelUiState(consentimientoPendiente = true, consentimiento = ConsentimientoDto("2026-11", false)), {}, {}, {})
+        },
+        "17-guia-rapida" to { GuiaScreen(Role.CLIENTE) {} },
+        "18-reportar" to { ReportarScreen(panelTutor, { _, _, _ -> }, {}, {}) },
+        "19-inicio-especialista" to { InicioScreen(especialista, PanelUiState(), { _: Screen -> }, {}, {}) },
         "04-notificaciones" to { NotificacionesScreen(panelTutor, {}, {}, {}) },
         "05-inicio-enfermeria" to { InicioScreen(enfermeria, panelEnf, {}, {}, {}) },
         "06-seguimiento" to { SeguimientoScreen(panelEnf, {}, {}) },

@@ -13,5 +13,8 @@ data class Optica(
     val lng: Double,
     val distanciaKm: Double = 0.0,
     val telefono: String = "7751234567",
-    val verificada: Boolean = false
+    val verificada: Boolean = false,
+    /** Optica, Consultorio, Oftalmologia... */
+    val tipo: String = "",
+    val horario: String? = null,
 )

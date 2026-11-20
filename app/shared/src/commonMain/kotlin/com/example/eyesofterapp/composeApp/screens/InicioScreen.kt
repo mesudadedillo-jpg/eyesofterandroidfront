@@ -1,5 +1,7 @@
 package com.example.eyesofterapp.composeApp.screens
 
+import com.example.eyesofterapp.data.network.URL_PORTAL
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,7 +88,8 @@ fun InicioScreen(
                     if (state.bandeja.noLeidas > 0) {
                         AvisoPendientes(state.bandeja.noLeidas, Modifier.aparecer(3)) { onAbrir(Screen.Notificaciones) }
                     }
-                    state.error?.let {
+                    BannerSinConexion(state)
+                    state.error?.takeIf { !state.sinConexion }?.let {
                         EyesTarjetaAcento(fondo = EyesColors.AmarilloBg, modifier = Modifier.fillMaxWidth()) {
                             Text(it, style = MaterialTheme.typography.bodyMedium, color = EyesColors.AmarilloFg)
                         }
@@ -102,6 +105,7 @@ fun InicioScreen(
                             "Pide a Dirección que revise tu usuario."
                         )
                     }
+                    Ayuda(onAbrir)
                 }
             }
         }
@@ -300,13 +304,29 @@ private fun ColumnScope.PanelAlumno(onAbrir: (Screen) -> Unit) {
 @Composable
 private fun ColumnScope.PanelEspecialista(onAbrir: (Screen) -> Unit) {
     AccesoRapido(EyesIconos.Lugar, "Directorio de clínicas", "Asociadas al programa primero", Modifier.fillMaxWidth().aparecer(4)) { onAbrir(Screen.Opticas(soloAsociadas = true)) }
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
     EyesTarjeta(Modifier.fillMaxWidth().aparecer(5)) {
-        EyesPildora("Próximamente", EyesColors.Celeste100, EyesColors.Marino, conPunto = false)
-        Text("Escanear pase médico", style = MaterialTheme.typography.titleMedium, color = EyesColors.Texto)
+        Text("Leer pase médico", style = MaterialTheme.typography.titleMedium, color = EyesColors.Texto)
         Text(
-            "Podrás leer con la cámara el código QR del pase del alumno y registrar la atención.",
+            "El QR del pase se valida en el portal con tu cuenta: ahí se revisa que sea para tu clínica, que no haya vencido y que no se haya usado, y registras la atención.",
             style = MaterialTheme.typography.bodyMedium, color = EyesColors.TextoSecundario
         )
+        EyesBotonPrincipal("Abrir el lector en el portal", onClick = { uri.openUri("$URL_PORTAL/Pases/Escanear") })
+    }
+}
+
+/** M-RS-01 (guía), C-RS-04 (reportar) y C-RS-07 (aviso de privacidad), para todos los roles. */
+@Composable
+private fun Ayuda(onAbrir: (Screen) -> Unit) {
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    EyesEtiqueta("Ayuda", EyesColors.TextoTenue)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        AccesoRapido(EyesIconos.Lista, "Guía rápida", "Cómo usar la app", Modifier.weight(1f)) { onAbrir(Screen.Guia) }
+        AccesoRapido(EyesIconos.Atencion, "Reportar", "Algo no funciona o tengo dudas", Modifier.weight(1f)) { onAbrir(Screen.Reportar) }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        com.example.eyesofterapp.composeApp.theme.EyesBotonTexto("Aviso de privacidad", onClick = { uri.openUri("$URL_PORTAL/Privacidad/Aviso") }, color = EyesColors.Azul)
+        com.example.eyesofterapp.composeApp.theme.EyesBotonTexto("Términos de uso", onClick = { uri.openUri("$URL_PORTAL/Privacidad/Terminos") }, color = EyesColors.Azul)
     }
 }
 

@@ -17,6 +17,8 @@ import io.ktor.http.headersOf
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import com.example.eyesofterapp.data.model.fechaCorta
+import com.example.eyesofterapp.data.model.fechaMx
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -80,7 +82,52 @@ class EyesApiTest {
         assertEquals(Screen.Tamizaje("abc"), rutaAScreen("tamizaje/abc"))
         assertEquals(Screen.Seguimiento, rutaAScreen("seguimiento"))
         assertEquals(Screen.Comprobantes, rutaAScreen("comprobantes"))
-        assertEquals(null, rutaAScreen("notificacion/n1"))
+        assertEquals(Screen.Notificaciones, rutaAScreen("notificacion/n1"))
+        assertEquals(null, rutaAScreen("otra"))
+    }
+
+    @Test
+    fun avisoDePrivacidadPendienteAvisaALaApp() = runTest {
+        var pedido = false
+        val motor = MockEngine {
+            respond("""{"error":"Acepta el aviso de privacidad para continuar.","codigo":"CONSENTIMIENTO_PENDIENTE"}""", HttpStatusCode.Forbidden, json)
+        }
+        val r = EyesApi(cliente(motor), token = { "t" }, alVencerSesion = {}, alPedirConsentimiento = { pedido = true }).tamizajes()
+        assertTrue(pedido)
+        assertEquals(403, (r as ResultadoRed.ErrorCliente).codigo)
+    }
+
+    @Test
+    fun leeElCasoConPaseCitasYLineaDeTiempo() = runTest {
+        val motor = MockEngine {
+            respond(
+                """[{"id":"12","folio":"ESC-1","alumnoId":1,"alumnoNombre":"Ana López","grado":"3","grupo":"B","fecha":"2026-11-19",
+                   "semaforo":"ROJO","semaforoTexto":"Atención urgente requerida","observaciones":"","campana":"Otoño",
+                   "caso":{"id":5,"folio":"EYS-2026-0003","estado":"EN_SEGUIMIENTO","destinoDefinido":true,"clinicaId":1,
+                   "clinicaNombre":"Óptica Centro","clinicaAsociada":true,
+                   "pase":{"codigo":"ABCDEFGHJKLMNPQRSTUVWXYZ23","codigoLegible":"ABCD EFGH","estado":"VIGENTE","creadoEn":"2026-11-19T16:00:00Z",
+                     "expiraEn":"2027-01-18T16:00:00Z","usadoEn":null,"clinicaId":1,"clinicaNombre":"Óptica Centro","clinicaDireccion":"Juárez 10",
+                     "clinicaTelefono":"7751000001","urlValidacion":"https://portal/Pases/Validar?codigo=ABC"},
+                   "fechaAtencion":null,"comprobanteAprobado":false,
+                   "citas":[{"id":3,"clinicaNombre":"Óptica Centro","fechaPreferida":"2026-11-25","horario":"MANANA","estado":"SOLICITADA","creadaEn":"x"}],
+                   "eventos":[{"fecha":"2026-11-19","tipo":"TAMIZAJE","descripcion":"Tamizaje Snellen"}]}}]""",
+                HttpStatusCode.OK, json
+            )
+        }
+        val t = (EyesApi(cliente(motor), token = { "t" }, alVencerSesion = {}).tamizajes() as ResultadoRed.Exito).data.single()
+        val caso = t.caso!!
+        assertTrue(caso.pase!!.vigente)
+        assertEquals("SOLICITADA", caso.citas.single().estado)
+        assertEquals("TAMIZAJE", caso.eventos.single().tipo)
+        assertEquals(false, caso.cerrado)
+    }
+
+    @Test
+    fun fechasDeCalendario() {
+        assertEquals("mié 25 nov", fechaCorta("2026-11-25"))
+        assertEquals("vie 1 ene", fechaCorta("2027-01-01"))
+        assertTrue(Regex("""\d{4}-\d{2}-\d{2}""").matches(fechaMx()))
+        assertTrue(fechaMx(1) > fechaMx())
     }
 
     @Test

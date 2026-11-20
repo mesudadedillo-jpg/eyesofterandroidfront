@@ -21,6 +21,9 @@ material3 = "1.12.0-alpha03"
 maplibre = "11.6.1"
 graphicsPath = "1.1.0"
 multiplatformSettings = "1.3.0"
+# Push (M-RI-02). El plugin solo se aplica si existe app/androidApp/google-services.json.
+firebaseMessaging = "25.1.3"
+googleServices = "4.5.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -62,6 +65,8 @@ androidx-graphics-path = { module = "androidx.graphics:graphics-path", version.r
 multiplatformSettings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatformSettings" }
 multiplatformSettingsNoArg = { module = "com.russhwolf:multiplatform-settings-no-arg", version.ref = "multiplatformSettings" }
 
+firebase-messaging = { module = "com.google.firebase:firebase-messaging", version.ref = "firebaseMessaging" }
+
 # Un motor HTTP por plataforma:
 ktor-clientOkhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-clientDarwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
@@ -69,6 +74,7 @@ ktor-clientJava = { module = "io.ktor:ktor-client-java", version.ref = "ktor" }
 ktor-clientJs = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 
 [plugins]
+googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 androidMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

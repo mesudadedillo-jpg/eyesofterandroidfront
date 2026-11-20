@@ -1,12 +1,13 @@
 package com.example.eyesofterapp
 
+import com.example.eyesofterapp.data.cache.AlmacenLocal
 import com.example.eyesofterapp.data.network.AuthApi
 import com.example.eyesofterapp.data.network.EyesApi
 import com.example.eyesofterapp.data.network.HttpClientFactory
 import com.example.eyesofterapp.data.network.OpticasApi
 import com.example.eyesofterapp.data.repository.AuthRepositoryImpl
 import com.example.eyesofterapp.data.session.SesionGuardada
-import com.example.eyesofterapp.domain.model.Role
+import com.example.eyesofterapp.domain.model.User
 import com.example.eyesofterapp.domain.repository.AuthRepository
 import com.example.eyesofterapp.domain.usecase.LoginUseCase
 import com.example.eyesofterapp.location.LocationProvider
@@ -26,15 +27,25 @@ class AppContainer(
     val sesionGuardada = SesionGuardada()
     val loginUseCase = LoginUseCase(authRepository)
     val opticasApi = OpticasApi(httpClient)
+    val almacen = AlmacenLocal()
+
+    /** Sin sesión: para reportar una falla desde el login (C-RS-04). */
+    val apiSinSesion = EyesApi(httpClient, token = { null }, alVencerSesion = {})
 
     fun crearOpticasViewModel(): OpticasViewModel =
         OpticasViewModel(opticasApi, locationProvider)
 
     /** Un panel por sesión: se crea al entrar y se cierra al salir. */
-    fun crearPanel(rol: Role, token: () -> String?, alVencerSesion: () -> Unit): PanelViewModel =
-        PanelViewModel(
-            api = EyesApi(httpClient, token, alVencerSesion),
-            rol = rol,
+    fun crearPanel(usuario: User, token: () -> String?, alVencerSesion: () -> Unit): PanelViewModel {
+        var panel: PanelViewModel? = null
+        val api = EyesApi(httpClient, token, alVencerSesion, alPedirConsentimiento = { panel?.pedirConsentimiento() })
+        return PanelViewModel(
+            api = api,
+            rol = usuario.role,
+            usuarioId = usuario.id.ifBlank { usuario.username },
+            almacen = almacen,
             viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
-        )
+            requiereConsentimiento = usuario.requiereConsentimiento,
+        ).also { panel = it }
+    }
 }

@@ -17,6 +17,11 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.backhandler.BackHandler
 import com.example.eyesofterapp.AppContainer
 import com.example.eyesofterapp.composeApp.screens.ComprobantesScreen
+import com.example.eyesofterapp.composeApp.screens.ConsentimientoScreen
+import com.example.eyesofterapp.composeApp.screens.ElegirDestinoScreen
+import com.example.eyesofterapp.composeApp.screens.GuiaScreen
+import com.example.eyesofterapp.composeApp.screens.ReportarScreen
+import com.example.eyesofterapp.composeApp.screens.SolicitarCitaScreen
 import com.example.eyesofterapp.composeApp.screens.InicioScreen
 import com.example.eyesofterapp.composeApp.screens.LoginScreen
 import com.example.eyesofterapp.composeApp.screens.NotificacionesScreen
@@ -29,6 +34,9 @@ import com.example.eyesofterapp.composeApp.theme.EyesMotion
 import com.example.eyesofterapp.domain.model.Session
 import com.example.eyesofterapp.ui.AuthUiState
 import com.example.eyesofterapp.ui.OpticasUiState
+import com.example.eyesofterapp.ui.PanelViewModel
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.flow.StateFlow
 
 /** Acciones del directorio que comparten la versión común y la nativa (Android). */
 class AccionesDirectorio(
@@ -57,14 +65,20 @@ fun AppNavHost(
     onLogout: () -> Unit,
     token: () -> String?,
     onSesionVencida: () -> Unit,
+    onConsentimientoAceptado: () -> Unit = {},
     directorioNativo: DirectorioNativo? = null,
+    /** Ruta pedida desde fuera (p. ej. al tocar una push): "tamizaje/12", "seguimiento"... */
+    rutaExterna: StateFlow<String?>? = null,
+    onRutaAtendida: () -> Unit = {},
+    /** Se llama con el panel de la sesión (Android registra ahí el token de push). */
+    alIniciarPanel: (PanelViewModel) -> Unit = {},
 ) {
     val sesion = state.session
     if (sesion == null) {
         LoginScreen(state, onLogin)
         return
     }
-    PanelConSesion(container, sesion, onLogout, token, onSesionVencida, directorioNativo)
+    PanelConSesion(container, sesion, onLogout, token, onSesionVencida, onConsentimientoAceptado, directorioNativo, rutaExterna, onRutaAtendida, alIniciarPanel)
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -75,13 +89,24 @@ private fun PanelConSesion(
     onLogout: () -> Unit,
     token: () -> String?,
     onSesionVencida: () -> Unit,
+    onConsentimientoAceptado: () -> Unit,
     directorioNativo: DirectorioNativo?,
+    rutaExterna: StateFlow<String?>?,
+    onRutaAtendida: () -> Unit,
+    alIniciarPanel: (PanelViewModel) -> Unit,
 ) {
     val user = sesion.user
     // Un panel por sesión: al cerrar sesión (o si cambia el token) se detiene y se crea otro.
-    val panel = remember(sesion.token) { container.crearPanel(user.role, token, onSesionVencida) }
+    val panel = remember(sesion.token) { container.crearPanel(user, token, onSesionVencida) }
     DisposableEffect(panel) { onDispose { panel.cerrar() } }
+    LaunchedEffect(panel) { alIniciarPanel(panel) }
     val panelState by panel.state.collectAsState()
+
+    // C-RC-08: sin aviso de privacidad aceptado no se muestran datos.
+    if (panelState.consentimientoPendiente) {
+        ConsentimientoScreen(panelState, onAceptar = { panel.aceptarConsentimiento(onConsentimientoAceptado) }, onLogout = onLogout, onMensajeVisto = panel::mensajeVisto)
+        return
+    }
 
     val opticasViewModel = remember(container) { container.crearOpticasViewModel() }
     val opticasState by opticasViewModel.state.collectAsState()
@@ -93,6 +118,15 @@ private fun PanelConSesion(
 
     // Botón o gesto "Atrás" del teléfono: regresa a la pantalla anterior.
     BackHandler(enabled = pila.size > 1) { volver() }
+
+    // M-RC-02: al tocar una push se abre directo la pantalla de su "ruta".
+    val ruta = rutaExterna?.collectAsState()?.value
+    LaunchedEffect(ruta) {
+        if (ruta != null) {
+            rutaAScreen(ruta)?.let { if (actual != it) abrir(it) }
+            onRutaAtendida()
+        }
+    }
 
     val acciones = remember(opticasViewModel) {
         AccionesDirectorio(
@@ -148,6 +182,31 @@ private fun PanelConSesion(
                 state = panelState,
                 onSubir = panel::subirComprobante,
                 onBuscarClinica = { abrir(Screen.Opticas(soloAsociadas = true)) },
+                onElegirDestino = { abrir(Screen.ElegirDestino(it)) },
+                onSolicitarCita = { abrir(Screen.SolicitarCita(it)) },
+                onMensajeVisto = panel::mensajeVisto,
+                onVolver = ::volver,
+            )
+            is Screen.ElegirDestino -> ElegirDestinoScreen(
+                tamizajeId = pantalla.tamizajeId,
+                state = panelState,
+                onCargarClinicas = panel::cargarClinicas,
+                onElegir = { clinica, manual, fin -> panel.elegirDestino(pantalla.tamizajeId, clinica, manual, fin) },
+                onMensajeVisto = panel::mensajeVisto,
+                onVolver = ::volver,
+            )
+            is Screen.SolicitarCita -> SolicitarCitaScreen(
+                tamizajeId = pantalla.tamizajeId,
+                state = panelState,
+                onCargarClinicas = panel::cargarClinicas,
+                onEnviar = { cita, fin -> panel.solicitarCita(pantalla.tamizajeId, cita, fin) },
+                onMensajeVisto = panel::mensajeVisto,
+                onVolver = ::volver,
+            )
+            Screen.Guia -> GuiaScreen(user.role, ::volver)
+            Screen.Reportar -> ReportarScreen(
+                state = panelState,
+                onEnviar = { tipo, mensaje, fin -> panel.reportar(tipo, mensaje, fin) },
                 onMensajeVisto = panel::mensajeVisto,
                 onVolver = ::volver,
             )

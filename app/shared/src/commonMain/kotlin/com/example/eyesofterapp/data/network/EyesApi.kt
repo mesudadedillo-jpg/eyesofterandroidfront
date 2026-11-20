@@ -1,6 +1,15 @@
 package com.example.eyesofterapp.data.network
 
+import com.example.eyesofterapp.data.model.AceptarConsentimientoDto
 import com.example.eyesofterapp.data.model.AvisoEntradaDto
+import com.example.eyesofterapp.data.model.CitaCreadaDto
+import com.example.eyesofterapp.data.model.CitaEntradaDto
+import com.example.eyesofterapp.data.model.ClinicaDto
+import com.example.eyesofterapp.data.model.ConsentimientoDto
+import com.example.eyesofterapp.data.model.DestinoDto
+import com.example.eyesofterapp.data.model.DestinoEntradaDto
+import com.example.eyesofterapp.data.model.RegistroDispositivoDto
+import com.example.eyesofterapp.data.model.ReporteEntradaDto
 import com.example.eyesofterapp.data.model.AvisoEnviadoDto
 import com.example.eyesofterapp.data.model.BandejaDto
 import com.example.eyesofterapp.data.model.ComprobanteDto
@@ -15,6 +24,7 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.request.get
@@ -39,6 +49,8 @@ class EyesApi(
     private val client: HttpClient,
     private val token: () -> String?,
     private val alVencerSesion: () -> Unit,
+    /** El servidor pidió aceptar el aviso de privacidad (403 CONSENTIMIENTO_PENDIENTE, C-RC-08). */
+    private val alPedirConsentimiento: () -> Unit = {},
 ) {
     suspend fun bandeja(): ResultadoRed<BandejaDto> = pedir { get("/api/notificaciones") { con() } }
 
@@ -50,6 +62,43 @@ class EyesApi(
     suspend fun tamizajes(): ResultadoRed<List<TamizajeDto>> = pedir { get("/api/tamizajes") { con() } }
 
     suspend fun tamizaje(id: String): ResultadoRed<TamizajeDto> = pedir { get("/api/tamizajes/$id") { con() } }
+
+    /** M-RFN-09: clínica del directorio o escrita a mano. Pase con QR si es asociada; si no, resumen. */
+    suspend fun elegirDestino(tamizajeId: String, clinicaId: Int?, nombreManual: String?): ResultadoRed<DestinoDto> =
+        pedir {
+            post("/api/tamizajes/$tamizajeId/destino") {
+                con(); contentType(ContentType.Application.Json); setBody(DestinoEntradaDto(clinicaId, nombreManual))
+            }
+        }
+
+    /** PNG del QR del pase vigente (se guarda para verlo sin conexión, M-RFNN-03). */
+    suspend fun pasePng(tamizajeId: String): ResultadoRed<ByteArray> = bytes("/api/tamizajes/$tamizajeId/pase.png?tamano=600")
+
+    suspend fun solicitarCita(tamizajeId: String, cita: CitaEntradaDto): ResultadoRed<CitaCreadaDto> =
+        pedir { post("/api/tamizajes/$tamizajeId/citas") { con(); contentType(ContentType.Application.Json); setBody(cita) } }
+
+    /** Todo el directorio, también sin coordenadas (M-RFNN-05/06). */
+    suspend fun clinicas(query: String? = null): ResultadoRed<List<ClinicaDto>> =
+        pedir { get("/api/clinicas") { query?.takeIf { it.isNotBlank() }?.let { parameter("query", it) } } }
+
+    suspend fun consentimiento(): ResultadoRed<ConsentimientoDto> = pedir { get("/api/consentimiento") { con() } }
+
+    suspend fun aceptarConsentimiento(version: String): ResultadoRed<Unit> = pedirSinCuerpo {
+        post("/api/consentimiento") { con(); contentType(ContentType.Application.Json); setBody(AceptarConsentimientoDto(version, true)) }
+    }
+
+    /** Falla o duda (C-RS-04). Funciona también sin sesión. */
+    suspend fun reportar(reporte: ReporteEntradaDto): ResultadoRed<Unit> = pedirSinCuerpo {
+        post("/api/reportes") { con(); contentType(ContentType.Application.Json); setBody(reporte) }
+    }
+
+    /** Token de Firebase del teléfono (M-RI-02). */
+    suspend fun registrarDispositivo(tokenPush: String, plataforma: String): ResultadoRed<Unit> = pedirSinCuerpo {
+        post("/api/dispositivos") { con(); contentType(ContentType.Application.Json); setBody(RegistroDispositivoDto(tokenPush, plataforma)) }
+    }
+
+    suspend fun olvidarDispositivo(tokenPush: String): ResultadoRed<Unit> =
+        pedirSinCuerpo { delete("/api/dispositivos") { con(); parameter("token", tokenPush) } }
 
     suspend fun comprobantes(estado: String? = null): ResultadoRed<List<ComprobanteDto>> =
         pedir { get("/api/comprobantes") { con(); estado?.let { parameter("estado", it) } } }
@@ -75,8 +124,10 @@ class EyesApi(
         }
     }
 
-    suspend fun archivoComprobante(id: String): ResultadoRed<ByteArray> = try {
-        val r = client.get("/api/comprobantes/$id/archivo") { con() }
+    suspend fun archivoComprobante(id: String): ResultadoRed<ByteArray> = bytes("/api/comprobantes/$id/archivo")
+
+    private suspend fun bytes(ruta: String): ResultadoRed<ByteArray> = try {
+        val r = client.get(ruta) { con() }
         if (r.status.isSuccess()) ResultadoRed.Exito(r.readRawBytes()) else error(r)
     } catch (e: Exception) {
         if (e is CancellationException) throw e
@@ -121,11 +172,16 @@ class EyesApi(
         }
 
     private suspend fun error(r: HttpResponse): ResultadoRed<Nothing> {
-        val mensaje = try { r.body<ErrorDto>().error } catch (_: Exception) { "" }
+        val cuerpo = try { r.body<ErrorDto>() } catch (_: Exception) { ErrorDto() }
+        val mensaje = cuerpo.error
         return when (val codigo = r.status.value) {
             401 -> {
-                alVencerSesion()
+                if (token() != null) alVencerSesion()
                 ResultadoRed.ErrorCliente(401, "Tu sesión venció. Inicia sesión de nuevo.")
+            }
+            403 -> {
+                if (cuerpo.codigo == "CONSENTIMIENTO_PENDIENTE") alPedirConsentimiento()
+                ResultadoRed.ErrorCliente(403, mensaje.ifBlank { "No tienes permiso para esto." })
             }
             in 400..499 -> ResultadoRed.ErrorCliente(codigo, mensaje.ifBlank { "Solicitud inválida ($codigo)" })
             else -> ResultadoRed.ErrorServidor(codigo, mensaje.ifBlank { "Error en el servidor ($codigo)" })

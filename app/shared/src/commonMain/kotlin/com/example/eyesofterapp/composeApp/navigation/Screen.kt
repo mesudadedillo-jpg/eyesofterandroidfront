@@ -15,6 +15,12 @@ sealed interface Screen {
     data object Seguimiento : Screen
     data object NuevoAviso : Screen
     data object PausaVisual : Screen
+    /** M-RFN-09: elegir la clínica a la que irá el alumno. */
+    data class ElegirDestino(val tamizajeId: String) : Screen
+    data class SolicitarCita(val tamizajeId: String) : Screen
+    /** M-RS-01: guía rápida dentro de la app. */
+    data object Guia : Screen
+    data object Reportar : Screen
 }
 
 /** Convierte datos.ruta de una notificación en la pantalla a la que lleva (M-RC-02). */
@@ -23,5 +29,6 @@ fun rutaAScreen(ruta: String?): Screen? = when {
     ruta.startsWith("tamizaje/") -> Screen.Tamizaje(ruta.removePrefix("tamizaje/"))
     ruta == "seguimiento" -> Screen.Seguimiento
     ruta == "comprobantes" -> Screen.Comprobantes
+    ruta.startsWith("notificacion/") -> Screen.Notificaciones
     else -> null
 }

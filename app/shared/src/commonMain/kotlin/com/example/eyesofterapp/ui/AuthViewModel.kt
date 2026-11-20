@@ -54,7 +54,7 @@ class AuthViewModel(
             // Rechazos del servidor (contraseña mala, cuenta bloqueada): no tiene caso reintentar.
             when (val e = primerIntento.exceptionOrNull()) {
                 is InvalidCredentialsException -> {
-                    _state.update { it.copy(isLoading = false, error = "Usuario o contraseña incorrectos") }
+                    _state.update { it.copy(isLoading = false, error = "Correo o contraseña incorrectos") }
                     return@launch
                 }
                 is RechazoDelServidorException, is IllegalArgumentException -> {
@@ -72,7 +72,7 @@ class AuthViewModel(
                 val segundo = loginUseCase(username, password, timeoutMs = 8000L)
                 segundo.getOrNull()?.let { exito(it); return@launch }
                 val mensaje = when (val e = segundo.exceptionOrNull()) {
-                    is InvalidCredentialsException -> "Usuario o contraseña incorrectos"
+                    is InvalidCredentialsException -> "Correo o contraseña incorrectos"
                     is RechazoDelServidorException -> e.message
                     else -> "No se puede conectar al servidor ($BASE_URL). Revisa tu conexión."
                 }
@@ -96,6 +96,11 @@ class AuthViewModel(
     fun logout() {
         sesionGuardada?.borrar()
         _state.value = AuthUiState()
+    }
+
+    fun consentimientoAceptado() {
+        sesionGuardada?.consentimientoAceptado()
+        _state.update { s -> s.copy(session = s.session?.let { it.copy(user = it.user.copy(requiereConsentimiento = false)) }) }
     }
 
     /** El servidor rechazó el token (401): vuelve al login con un aviso. */

@@ -212,16 +212,54 @@ La app y el servidor **no comparten código**, solo el contrato de
 `domain/model/Optica.kt`) o una ruta, hay que cambiar también el servidor y
 las dos copias de `API.md`.
 
-Si el servidor no responde o devuelve una lista vacía, `OpticasApi` muestra un
-catálogo local de respaldo con 8 ópticas.
+Las cuentas son las del **portal web** (`eyesofterweb`): la app inicia sesión con el correo y la
+contraseña que Dirección dio de alta allá. El portal y el servidor comparten la base de datos.
+
+Si el servidor no responde, el directorio muestra lo último guardado.
+
+## Qué hace la app frente a la especificación
+
+| Requisito | Dónde |
+|---|---|
+| M-RFN-01/02 Inicio de sesión con las cuentas del portal (correo) y aviso de resultado | `LoginScreen.kt`, push `PushAndroid.kt` |
+| M-RFN-03/04 Resultado con semáforo (color + texto + icono) | `TamizajeScreen.kt` |
+| M-RFN-05 / M-RI-04 Foto de la receta o comprobante | `TamizajeScreen.kt`, `TelefonoAndroid.kt` |
+| M-RFN-06/07 / M-RI-03/05 Mapa 3D con asociadas primero e insignia | `DirectorioMapa.kt` |
+| M-RFN-08 Pedir cita | `ExpedienteScreens.kt` → `SolicitarCitaScreen` |
+| M-RFN-09..11 Destino: pase con QR o resumen | `ExpedienteScreens.kt` → `ElegirDestinoScreen`, `PaseMedico`, `ResumenTamizaje` |
+| M-RFN-12/13 / M-RI-06 Pausa 20-20-20 con vibración y sonido, ejercicios | `PausaVisualScreen.kt` |
+| M-RFNN-01/03 Sin conexión: último reporte, pase y resumen guardados | `data/cache/AlmacenLocal.kt`, `BannerSinConexion` |
+| M-RFNN-02 Comprobante en cola sin red; se envía solo | `PanelViewModel.subirComprobante/enviarCola` |
+| M-RFNN-04 Pendientes al iniciar sesión; el servidor manda correo si no hay push | `InicioScreen.kt`, servidor |
+| M-RFNN-05 Directorio como lista sin ubicación | `DirectorioMapa.kt` (modo lista) |
+| M-RFNN-06 Clínica escrita a mano: se verifica y se ofrece el resumen | `ElegirDestinoScreen` |
+| M-RI-02 Push Android/iOS (FCM) | `PushAndroid.kt` (se activa con `google-services.json`) |
+| M-RC-02 La notificación abre su pantalla | `rutaAScreen`, `MainActivity.onNewIntent` |
+| C-RC-02 Cambios visibles en < 5 s | bandeja cada 5 s en `PanelViewModel` |
+| C-RC-03 Solo HTTPS en release | `AndroidManifest.xml` (`usesCleartextTraffic` = `false` en release) |
+| C-RC-08 / C-RS-07 Aviso de privacidad aceptado antes de ver datos | `AyudaScreens.kt` → `ConsentimientoScreen` |
+| C-RFNN-02 Recuperar contraseña (portal) | Enlace en el login |
+| M-RS-01 Guía rápida · C-RS-04 Reportar una falla | `AyudaScreens.kt` |
+
+Capturas de todas las pantallas: [`docs/capturas/`](docs/capturas/).
+
+### Activar las notificaciones push (Firebase)
+
+1. En la [consola de Firebase](https://console.firebase.google.com) crea el proyecto y agrega
+   una app Android con el paquete `com.example.eyesofterapp`.
+2. Descarga `google-services.json` y ponlo en `app/androidApp/`. Está en `.gitignore`: no contiene
+   secretos del servidor, pero es mejor no publicarlo.
+3. En el mismo proyecto: *Configuración → Cuentas de servicio → Generar clave privada* y pega el
+   JSON en la variable `FIREBASE_SERVICE_ACCOUNT` del servidor en Railway.
+4. Compila de nuevo. Al iniciar sesión, la app pide permiso de notificaciones y registra el teléfono.
+
+Sin Firebase la app funciona igual: los avisos se ven en la bandeja (se revisa cada 5 s) y el
+servidor los manda por correo si está configurado Resend.
 
 ## Pendientes conocidos
 
-- **Notificaciones push con Firebase** (ver la tabla al final de `docs/API.md`):
-  falta crear el proyecto de Firebase, agregar `google-services.json` y registrar
-  el token del teléfono en el servidor.
+- **Firebase**: falta crear el proyecto y agregar `google-services.json` (ver arriba).
+- `URL_PORTAL` en `PlatformConfig.kt` debe apuntar a la URL pública real del portal web.
 - La pausa 20-20-20 solo corre con la app abierta (no hay servicio en segundo plano).
-- Escaneo del pase médico con QR para el especialista (el servidor tampoco lo tiene aún).
 - `applicationId` es `com.example.eyesofterapp`; Google Play no acepta `com.example`.
-- iOS no se ha compilado desde la separación (requiere Mac). En iOS no hay `Telefono`
-  todavía: se ocultan los botones de cámara.
+- iOS no se ha compilado (requiere Mac). En iOS no hay `Telefono` ni `Push` todavía.

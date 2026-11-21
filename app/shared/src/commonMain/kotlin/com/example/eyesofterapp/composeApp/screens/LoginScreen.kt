@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,18 +73,20 @@ import com.example.eyesofterapp.ui.AuthUiState
 @Composable
 fun LoginScreen(
     state: AuthUiState,
-    onLogin: (username: String, password: String) -> Unit
+    onLogin: (username: String, password: String, codigo: String?) -> Unit
 ) {
     // rememberSaveable: conserva lo escrito aunque se rote el teléfono
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
+    // Verificación en dos pasos: el código no se guarda al rotar (vence en segundos).
+    var codigo by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
     // Lo usan el botón y la tecla "Listo" del teclado
     fun submit() {
         focusManager.clearFocus()
-        onLogin(username, password)
+        onLogin(username, password, codigo.takeIf { state.pideCodigo && it.isNotBlank() })
     }
 
     // Colores de los campos: borde fino que se vuelve azul al escribir.
@@ -195,6 +198,26 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            // Verificación en dos pasos (personal escolar): el código de la app autenticadora.
+            if (state.pideCodigo) {
+                Text(
+                    "Tu cuenta tiene verificación en dos pasos. Abre tu app autenticadora y escribe el código de EYESOFTER.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = EyesColors.TextoSecundario
+                )
+                OutlinedTextField(
+                    value = codigo,
+                    onValueChange = { nuevo -> codigo = nuevo.filter(Char::isDigit).take(6) },
+                    label = { Text("Código de 6 dígitos") },
+                    singleLine = true,
+                    shape = EyesShapes.Boton,
+                    colors = coloresCampo,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             // Solo aparece si el ViewModel puso un mensaje de error. Se despliega
             // (en vez de aparecer de golpe) para que el botón no "salte" hacia abajo.
             AnimatedVisibility(
@@ -239,6 +262,7 @@ fun LoginScreen(
             EyesBotonTexto("Aviso de privacidad", onClick = { uriPie.openUri("$URL_PORTAL/Privacidad/Aviso") })
             EyesBotonTexto("Ayuda", onClick = { uriPie.openUri("$URL_PORTAL/Soporte/Ayuda") })
         }
+        EyesBotonTexto("Tu información está segura", onClick = { uriPie.openUri("$URL_PORTAL/Privacidad/Seguridad") })
         Spacer(Modifier.height(16.dp))
     }
 }

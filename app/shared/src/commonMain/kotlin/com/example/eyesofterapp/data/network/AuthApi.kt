@@ -40,7 +40,11 @@ class AuthApi(private val client: HttpClient) {
                     ResultadoRed.Exito(response.body<LoginResponseDto>())
                 }
                 response.status == HttpStatusCode.Unauthorized -> {
-                    ResultadoRed.ErrorCliente(401, "Correo o contraseña incorrectos")
+                    // 401 también puede ser "falta el código de dos pasos": el servidor lo dice en "codigo".
+                    val error = try { response.body<ErrorDto>() } catch (_: Exception) { ErrorDto() }
+                    if (error.codigo == "REQUIERE_2FA" || error.codigo == "CODIGO_2FA_INVALIDO")
+                        ResultadoRed.ErrorCliente(401, error.error, error.codigo)
+                    else ResultadoRed.ErrorCliente(401, "Correo o contraseña incorrectos")
                 }
                 response.status.value in 400..499 -> {
                     // 429 = cuenta bloqueada por intentos fallidos: el servidor dice cuántos minutos faltan.

@@ -31,3 +31,9 @@ class InvalidCredentialsException : Exception("Correo o contraseña incorrectos"
 
 /** El servidor rechazó la petición con un motivo que se le muestra al usuario tal cual (p. ej. cuenta bloqueada). */
 class RechazoDelServidorException(mensaje: String) : Exception(mensaje)
+
+/**
+ * La cuenta tiene verificación en dos pasos: falta el código de la app autenticadora
+ * ([invalido] = se mandó uno y no era correcto).
+ */
+class RequiereCodigoException(mensaje: String, val invalido: Boolean) : Exception(mensaje)

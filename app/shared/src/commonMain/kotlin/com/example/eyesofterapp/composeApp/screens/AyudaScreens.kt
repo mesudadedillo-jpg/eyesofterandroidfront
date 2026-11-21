@@ -168,6 +168,7 @@ fun GuiaScreen(rol: Role, onVolver: () -> Unit) {
                     EyesBotonTexto("Ayuda", onClick = { uri.openUri("$URL_PORTAL/Soporte/Ayuda") }, color = EyesColors.Azul)
                     EyesBotonTexto("Aviso de privacidad", onClick = { uri.openUri("$URL_PORTAL/Privacidad/Aviso") }, color = EyesColors.Azul)
                 }
+                EyesBotonTexto("Tu información está segura: así la protegemos", onClick = { uri.openUri("$URL_PORTAL/Privacidad/Seguridad") }, color = EyesColors.Azul)
             }
             Spacer(Modifier.height(8.dp))
         }

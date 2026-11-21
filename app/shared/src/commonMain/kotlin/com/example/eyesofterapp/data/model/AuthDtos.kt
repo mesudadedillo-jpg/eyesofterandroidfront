@@ -9,7 +9,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class LoginRequestDto(
     val username: String,
-    val password: String
+    val password: String,
+    /** Código de 6 dígitos de la app autenticadora (verificación en dos pasos). */
+    val codigo: String? = null,
 )
 
 /** "username" es el correo de la cuenta del portal (docs/API.md §3). */

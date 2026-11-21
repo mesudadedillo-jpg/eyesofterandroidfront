@@ -8,6 +8,7 @@ import com.example.eyesofterapp.data.network.ResultadoRed
 import com.example.eyesofterapp.data.session.SesionGuardada
 import com.example.eyesofterapp.domain.model.InvalidCredentialsException
 import com.example.eyesofterapp.domain.model.RechazoDelServidorException
+import com.example.eyesofterapp.domain.model.RequiereCodigoException
 import com.example.eyesofterapp.domain.usecase.LoginUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,17 +43,22 @@ class AuthViewModel(
         }
     }
 
-    fun login(username: String, password: String) {
+    fun login(username: String, password: String, codigo: String? = null) {
         if (_state.value.isLoading) return
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            val primerIntento = loginUseCase(username, password, timeoutMs = 3000L)
+            val primerIntento = loginUseCase(username, password, timeoutMs = 3000L, codigo = codigo)
             primerIntento.getOrNull()?.let { exito(it); return@launch }
 
             // Rechazos del servidor (contraseña mala, cuenta bloqueada): no tiene caso reintentar.
             when (val e = primerIntento.exceptionOrNull()) {
+                is RequiereCodigoException -> {
+                    // Verificación en dos pasos: se pide el código de la app autenticadora.
+                    _state.update { it.copy(isLoading = false, pideCodigo = true, error = if (e.invalido || codigo != null) e.message else null) }
+                    return@launch
+                }
                 is InvalidCredentialsException -> {
                     _state.update { it.copy(isLoading = false, error = "Correo o contraseña incorrectos") }
                     return@launch
@@ -69,9 +75,13 @@ class AuthViewModel(
 
             if (salud is ResultadoRed.Exito) {
                 _state.update { it.copy(error = "Conectando con el servidor...") }
-                val segundo = loginUseCase(username, password, timeoutMs = 8000L)
+                val segundo = loginUseCase(username, password, timeoutMs = 8000L, codigo = codigo)
                 segundo.getOrNull()?.let { exito(it); return@launch }
                 val mensaje = when (val e = segundo.exceptionOrNull()) {
+                    is RequiereCodigoException -> {
+                        _state.update { it.copy(pideCodigo = true) }
+                        if (e.invalido || codigo != null) e.message else null
+                    }
                     is InvalidCredentialsException -> "Correo o contraseña incorrectos"
                     is RechazoDelServidorException -> e.message
                     else -> "No se puede conectar al servidor ($BASE_URL). Revisa tu conexión."
@@ -90,7 +100,7 @@ class AuthViewModel(
 
     private fun exito(sesion: com.example.eyesofterapp.domain.model.Session) {
         sesionGuardada?.guardar(sesion)
-        _state.update { it.copy(isLoading = false, session = sesion, error = null) }
+        _state.update { it.copy(isLoading = false, session = sesion, error = null, pideCodigo = false) }
     }
 
     fun logout() {

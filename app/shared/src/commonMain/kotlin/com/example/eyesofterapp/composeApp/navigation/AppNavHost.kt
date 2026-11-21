@@ -61,7 +61,7 @@ typealias DirectorioNativo = @Composable (
 fun AppNavHost(
     container: AppContainer,
     state: AuthUiState,
-    onLogin: (String, String) -> Unit,
+    onLogin: (String, String, String?) -> Unit,
     onLogout: () -> Unit,
     token: () -> String?,
     onSesionVencida: () -> Unit,

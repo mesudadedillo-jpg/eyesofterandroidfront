@@ -139,6 +139,18 @@ No distingue mayúsculas.
 | 401 | Cuenta inexistente o contraseña incorrecta | `{"error": "Credenciales inválidas"}` |
 | 403 | Cuenta desactivada o sin rol | `{"error": "Tu cuenta está desactivada. Comunícate con la escuela."}` |
 | 429 | 3.er intento fallido seguido, o cuenta aún bloqueada (C-RFNN-01) | `{"error": "Cuenta bloqueada por intentos fallidos. Intenta de nuevo en 15 min."}` |
+| 401 | La cuenta tiene **verificación en dos pasos** y falta el código | `{"error": "Escribe el código de 6 dígitos…", "codigo": "REQUIERE_2FA"}` |
+| 401 | El código de dos pasos no es correcto (cuenta como intento fallido) | `{"error": "El código no es correcto…", "codigo": "CODIGO_2FA_INVALIDO"}` |
+| 403 | Dirección o Enfermería **sin** verificación en dos pasos (obligatoria con `EXIGIR_2FA_PERSONAL`) | `{"error": "…activa primero la verificación en dos pasos en el portal…", "codigo": "ACTIVAR_2FA"}` |
+
+**Verificación en dos pasos (TOTP):** se activa en el portal (menú de la cuenta). Desde ese momento el
+login lleva `"codigo": "123456"` con el código de la app autenticadora (Google/Microsoft Authenticator…).
+La app manda primero correo y contraseña; si recibe `REQUIERE_2FA`, muestra el campo del código y repite
+el login con `codigo`. Es la misma clave que usa el portal (`asp_net_user_tokens`), así que el mismo
+código sirve en los dos. **Es obligatoria para Dirección y Enfermería**; opcional para los demás.
+
+**Duración del token:** 30 días para tutores y alumnos; **12 horas para el personal escolar**
+(`JWT_HORAS_PERSONAL`), que ve datos de muchos menores.
 
 ```json
 {
@@ -379,8 +391,8 @@ cuando una tele pide "entra a esta página y escribe el código":
    `{"solicitud": "<secreto>", "codigo": "K7QM-3RTA", "ruta": "/escritorio/vincular?codigo=K7QM-3RTA", "expiraEnSegundos": 600, "intervaloSegundos": 3}`.
    Límite de 30 por minuto por IP. **503** si hay demasiadas solicitudes abiertas.
 2. El escritorio abre `{servidor}{ruta}` en el navegador y muestra el `codigo`. La página pide
-   correo y contraseña **del portal** (mismo bloqueo de 3 intentos) y que se confirme que el código
-   coincide con el de la pantalla. Solo Dirección y Enfermería pueden aprobar (**403** a los demás).
+   correo, contraseña **y código de dos pasos** de la cuenta del portal (mismo bloqueo de 3 intentos)
+   y que se confirme que el código coincide con el de la pantalla. Solo Dirección y Enfermería pueden aprobar (**403** a los demás).
    Queda en la bitácora (`VINCULAR_EQUIPO`).
 3. El escritorio pregunta cada `intervaloSegundos`: `POST /api/escritorio/vinculaciones/estado`
    `{"solicitud": "<secreto>"}` → **202** `{"estado":"PENDIENTE"}` · **200**
@@ -462,6 +474,7 @@ Si cambias una, cámbiala en los dos (`eyesofterweb/Servicios/Expedientes.cs` y 
 
 | Fecha | Cambio |
 |---|---|
+| 2026-11-21 (c) | **Seguridad.** `LoginRequestDto` agrega `codigo` (verificación en dos pasos); nuevos `REQUIERE_2FA`, `CODIGO_2FA_INVALIDO` (401) y `ACTIVAR_2FA` (403). La página de vinculación del escritorio pide el código. Token del personal: 12 h. Cabecera HSTS. |
 | 2026-11-21 (b) | **Varias escuelas.** El personal solo ve lo de sus escuelas (`usuario_planteles`; `administrador_global` ve todas); lo de otra escuela es 404. Alertas a la Enfermería de la escuela del alumno. Avisos y seguimiento por escuela. Reportes de fallas al administrador global. El escritorio trabaja con las escuelas de quien lo vinculó; matrícula única por escuela y nuevo **409** `MATRICULA_AMBIGUA`. Vinculaciones en la base. **Convenios:** `convenio` en `Optica`, `ClinicaDto` (con sesión de tutor) y `PaseDto`. |
 | 2026-11-21 | **Escritorio: adiós a `ESCRITORIO_API_KEY`.** Cada equipo se vincula en el navegador con una cuenta de Dirección o Enfermería (`/api/escritorio/vinculaciones`, `/escritorio/vincular`) y usa `Authorization: Bearer <token del equipo>`. `GET /api/escritorio/alumnos` exige `q` de 3+ caracteres, devuelve máx. 20 y ya no trae `usaLentes`. Nueva `GET /api/escritorio/equipo`. La bitácora registra quién envía y quién busca. |
 | 2026-11-20 | **Base PostgreSQL compartida con el portal.** Login con el correo y las cuentas de Identity (bloqueo compartido, 403 cuenta desactivada; el token deja de servir si se desactiva la cuenta o cambia la contraseña). `UserDto` agrega `id` y `requiereConsentimiento`. Nuevas: `/api/consentimiento`, `/api/clinicas`, destino/pase.png/citas (§9), `/api/reportes`, `/api/escritorio/incidencias` y `/alumnos`. `TamizajeDto` agrega `alumnoId`, `campana` y `caso` (pase, citas, línea de tiempo); ids numéricos en texto. **El escritorio manda `matricula` y agudezas en lugar de `alumnoNombre`/`tutorUsername`.** Comprobantes agregan `casoId` y `alumno`; `tutor` es el correo. `/opticas/cercanas` sale de la base: asociadas primero, agrega `tipo` y `horario`. `/salud` revisa la base y agrega `pendientesEnvio`. `GET /` responde JSON. |

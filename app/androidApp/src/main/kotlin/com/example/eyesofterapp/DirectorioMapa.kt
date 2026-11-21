@@ -382,7 +382,10 @@ private fun MapaLibre(
         onDispose {
             ciclo.lifecycle.removeObserver(observador)
             // Primero se apaga el punto del usuario (sus animaciones leían un estilo ya destruido).
-            runCatching { mapa?.locationComponent?.let { if (it.isLocationComponentActivated) it.isLocationComponentEnabled = false } }
+            // Sin permiso de ubicación el punto nunca se activó: no hay nada que apagar.
+            val conUbicacion = listOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                .any { mapView.context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+            if (conUbicacion) runCatching { mapa?.locationComponent?.let { if (it.isLocationComponentActivated) it.isLocationComponentEnabled = false } }
             runCatching { mapView.onPause(); mapView.onStop(); mapView.onDestroy() }
         }
     }

@@ -5,13 +5,18 @@ import com.example.eyesofterapp.domain.model.Optica
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import com.example.eyesofterapp.domain.model.distanciaHaversineKm
 
-class OpticasApi(private val client: HttpClient) {
+/**
+ * Directorio de ópticas para el mapa. La ruta es pública; si hay sesión se manda el token para
+ * que el servidor agregue el convenio de la escuela de los hijos del tutor (campo `convenio`).
+ */
+class OpticasApi(private val client: HttpClient, private val token: () -> String? = { null }) {
 
     private val opticasCatalogo = listOf(
         Optica(1, "Óptica Tulancingo Centro", "Av. Juárez 102, Centro", "Tulancingo", "43600", 20.0825, -98.3622, 1.2, "7757531234", true),
@@ -27,6 +32,7 @@ class OpticasApi(private val client: HttpClient) {
     suspend fun getOpticasCercanas(lat: Double, lng: Double): ResultadoRed<List<Optica>> {
         val resultado = ejecutarPeticion {
             client.get("/opticas/cercanas") {
+                token()?.let { bearerAuth(it) }
                 parameter("lat", lat)
                 parameter("lng", lng)
             }
@@ -48,6 +54,7 @@ class OpticasApi(private val client: HttpClient) {
     suspend fun getOpticasPorCiudadOZip(query: String): ResultadoRed<List<Optica>> {
         val resultado = ejecutarPeticion {
             client.get("/opticas/cercanas") {
+                token()?.let { bearerAuth(it) }
                 parameter("query", query)
                 parameter("ciudad", query)
                 parameter("cp", query)

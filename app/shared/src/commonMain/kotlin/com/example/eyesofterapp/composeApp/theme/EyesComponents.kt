@@ -327,6 +327,17 @@ fun EyesPildoraOptica(verificada: Boolean) {
     }
 }
 
+/** Beneficio del convenio entre la escuela del alumno y la clínica. Texto, no solo color (accesible). */
+@Composable
+fun EyesConvenio(beneficio: String?) {
+    if (beneficio.isNullOrBlank()) return
+    Text(
+        "Convenio con tu escuela: $beneficio",
+        style = MaterialTheme.typography.labelMedium,
+        color = EyesColors.VerdeBg,
+    )
+}
+
 /** Etiqueta pequeña en mayúsculas que va arriba de un título ("eyebrow"). */
 @Composable
 fun EyesEtiqueta(texto: String, color: Color = EyesColors.Azul) {

@@ -63,7 +63,8 @@ En producción solo HTTPS (TLS 1.2+, lo pone Railway; C-RC-03). La app de releas
 |---|---|---|
 | Nadie | — | `GET /`, `GET /salud`, `POST /api/login`, `GET /opticas/cercanas`, `GET /api/clinicas`, `POST /api/reportes` |
 | La app (con sesión) | `Authorization: Bearer <token>` con el `token` del login | Todo lo demás bajo `/api/` |
-| Sistema de escritorio | `X-Api-Key: <ESCRITORIO_API_KEY>` | `/api/escritorio/...` |
+| Nadie (vinculación) | — | `POST /api/escritorio/vinculaciones`, `POST /api/escritorio/vinculaciones/estado`, `GET/POST /escritorio/vincular` (página web) |
+| Equipo de escritorio vinculado | `Authorization: Bearer <token del equipo>` (§13). **No** sirve el token de la app, ni el del equipo en las rutas de la app | Resto de `/api/escritorio/...` |
 
 **401** `{"error": "Sesión inválida o vencida. Inicia sesión de nuevo."}` cuando: no hay token, venció
 (dura 30 días), lo firmó otro servidor, **la cuenta fue desactivada** en el portal, o **cambió la
@@ -78,8 +79,28 @@ En el portal se llaman Administrador, Enfermeria, Tutor, Especialista y Alumno.
 después **429** hasta el siguiente minuto.
 
 **Bitácora (C-RC-07, C-RFNN-06):** inicios de sesión, fallos, bloqueos, accesos denegados a datos
-ajenos y acciones del personal quedan en la tabla `auditoria` con `origen = "app"` o `"escritorio"`.
-Dirección la consulta en el portal (Auditoría).
+ajenos y acciones del personal quedan en la tabla `auditoria` con `origen = "app"` o `"escritorio"`
+y, cuando aplica, la escuela (`plantel_id`). Dirección la consulta en el portal (Auditoría): ve la de
+sus escuelas; el administrador global, toda.
+
+### Varias escuelas (C-RE-01) 🏫
+
+El sistema atiende **varias escuelas** con la misma base. Todo lo de un alumno (tamizajes, casos,
+pases, citas, comprobantes, avisos) pertenece a la **escuela del alumno** (`alumnos.plantel_id`).
+
+| Cuenta | Qué escuelas ve |
+|---|---|
+| Dirección / Enfermería | Solo las que tiene asignadas en el portal (tabla `usuario_planteles`). Sin escuelas, nada |
+| Dirección con `administrador_global` | Todas. Es para el equipo que administra EYESOFTER: da de alta escuelas y recibe los reportes de fallas |
+| Tutor, alumno, especialista | Sin cambio: lo suyo (sus hijos, su expediente, los pases de su clínica), sea de la escuela que sea |
+| Equipo de escritorio | Las de la cuenta que lo vinculó (§13) |
+
+- Un tamizaje, comprobante o caso de **otra escuela** responde **404** (como si no existiera) y queda
+  como `ACCESO_DENEGADO` en la bitácora.
+- Las alertas a Enfermería (tutor sin cuenta, comprobante nuevo, cita, aviso sin leer, falla de
+  sincronización) le llegan **solo a la Enfermería de la escuela del alumno**.
+- La **matrícula es única dentro de cada escuela**, no en todo el sistema: dos escuelas pueden tener `A001`.
+- El folio de caso `EYS-AAAA-NNNN` sigue siendo único en todo el sistema.
 
 ---
 
@@ -98,7 +119,7 @@ Dirección la consulta en el portal (Auditoría).
 - `db`: la base respondió en menos de 2 s. Si no, `status` es `"degradado"` (sigue siendo **200**
   para que Railway no reinicie el servicio en bucle mientras la base arranca).
 - `version`: commit desplegado en Railway (`dev` en local).
-- `push` / `correo` / `escritorio`: si están configurados Firebase, Resend y `ESCRITORIO_API_KEY`.
+- `push` / `correo`: si están configurados Firebase y Resend. `escritorio`: siempre `true` (la vinculación de equipos ya no depende de una clave).
 - `pendientesEnvio`: notificaciones esperando entrega. Si crece y no baja, algo falla con push/correo.
 - Railway la usa como *healthcheck* (`railway.json`).
 
@@ -168,6 +189,11 @@ fuera de rango, o si no viene nada.
 
 `verificada` = asociada al programa (insignia, M-RFN-07).
 
+**Convenios:** la ruta es pública, pero si la petición trae `Authorization: Bearer <token>` de un **tutor**,
+cada clínica trae `"convenio": "20 % en armazones"` con el beneficio que su escuela pactó con esa
+clínica para los alumnos (lo registra Dirección en el portal → Convenios). Sin sesión, con otro rol o con
+un token vencido, `convenio` es `null` y la respuesta es la misma de siempre (nunca 401).
+
 ### `GET /api/clinicas[?query=]` — todo el directorio activo
 
 Incluye las que **no tienen coordenadas** (`lat`/`lng` = `null`). Asociadas primero. Para la lista sin
@@ -176,8 +202,10 @@ ubicación (M-RFNN-05) y para revisar una clínica escrita a mano (M-RFNN-06).
 ```json
 [{ "id": 4, "nombre": "Oftalmología Norte", "tipo": "Oftalmologia", "direccion": "Blvd. Norte 100",
    "ciudad": "Tulancingo", "codigoPostal": "43620", "telefono": "7751000004", "horario": null,
-   "lat": null, "lng": null, "asociada": false }]
+   "lat": null, "lng": null, "asociada": false, "convenio": null }]
 ```
+
+Igual que el mapa: con la sesión de un tutor, `convenio` trae el beneficio para sus hijos.
 
 ## 6. Notificaciones 🔒
 
@@ -291,6 +319,8 @@ Tutor del alumno (o personal). Uno de los dos:
 - Cambiar de destino **cancela** el pase anterior: solo hay uno vigente.
 - **200** `{"conPase": true, "mensaje": "Listo. Muestra este pase…", "tamizaje": TamizajeDto}`.
 - **409** si el resultado es verde o el caso está cerrado. **400** si la clínica no existe o está desactivada.
+- El `pase` trae `"convenio": "…"` si la escuela del alumno tiene convenio vigente con esa clínica (también
+  sale en el PDF del pase y se le muestra al especialista al validar el QR). `null` = sin convenio.
 
 ### `GET /api/tamizajes/{id}/pase.png[?tamano=480]`
 
@@ -327,19 +357,50 @@ El archivo se guarda **cifrado** en la base (C-RC-04). Al subirlo se avisa a Enf
 
 | Ruta | Notas |
 |---|---|
-| `POST /api/notificaciones` | Aviso: `{"titulo":"Junta","mensaje":"…","usernames":["correo@…"],"rol":"CLIENTE"}` (lista, rol o ambos). **201** `{"enviadas": 12, "noEncontrados": []}`. **403** para otros roles |
-| `GET /api/notificaciones/seguimiento[?soloNoLeidas=true]` | Resultados enviados a tutores: `[{notificacionId, tutor, alumno, tamizajeId, creadaEn, leidaEn, recordatoriosEnviados, entregadaPor: ["push"]}]` |
+| `POST /api/notificaciones` | Aviso: `{"titulo":"Junta","mensaje":"…","usernames":["correo@…"],"rol":"CLIENTE"}` (lista, rol o ambos). Solo llega a cuentas **de sus escuelas**: un correo de otra escuela sale en `noEncontrados`. **201** `{"enviadas": 12, "noEncontrados": []}`. **403** para otros roles |
+| `GET /api/notificaciones/seguimiento[?soloNoLeidas=true]` | Resultados enviados a tutores **de sus escuelas**: `[{notificacionId, tutor, alumno, tamizajeId, creadaEn, leidaEn, recordatoriosEnviados, entregadaPor: ["push"]}]` |
+| `GET /api/tamizajes`, `GET /api/comprobantes` | El personal recibe solo los de sus escuelas |
 
 ## 12. `POST /api/reportes` (C-RS-04) — con o sin sesión
 
 `{"tipo": "FALLA", "mensaje": "La app se cierra al abrir el mapa", "correo": "papa@example.com", "plataforma": "ANDROID"}`
 
 - `tipo`: `FALLA` o `DUDA`. `mensaje`: 10 a 1000 caracteres. `correo` obligatorio sin sesión.
-- **201** `{"id": 7}`. Dirección lo recibe en su bandeja y lo atiende en el portal (Soporte).
+- **201** `{"id": 7}`. Lo recibe el **administrador global** (si aún no hay, toda Dirección) y lo atiende en el portal (Soporte).
 
-## 13. Sistema de escritorio 🔑 (`X-Api-Key`)
+## 13. Sistema de escritorio 🔑 (equipo vinculado)
 
-**401** sin clave o con clave equivocada (se registra). **503** si el servidor no tiene `ESCRITORIO_API_KEY`.
+**Ya no hay una clave compartida (`ESCRITORIO_API_KEY` / `X-Api-Key`).** Con ella, cualquiera que
+instalara el escritorio y la tuviera podía buscar a todos los alumnos de la escuela. Ahora cada
+computadora se **vincula** con la cuenta del portal de alguien de **Dirección o Enfermería**, como
+cuando una tele pide "entra a esta página y escribe el código":
+
+1. `POST /api/escritorio/vinculaciones` `{"equipo": "Enfermería PC1"}` → **201**
+   `{"solicitud": "<secreto>", "codigo": "K7QM-3RTA", "ruta": "/escritorio/vincular?codigo=K7QM-3RTA", "expiraEnSegundos": 600, "intervaloSegundos": 3}`.
+   Límite de 30 por minuto por IP. **503** si hay demasiadas solicitudes abiertas.
+2. El escritorio abre `{servidor}{ruta}` en el navegador y muestra el `codigo`. La página pide
+   correo y contraseña **del portal** (mismo bloqueo de 3 intentos) y que se confirme que el código
+   coincide con el de la pantalla. Solo Dirección y Enfermería pueden aprobar (**403** a los demás).
+   Queda en la bitácora (`VINCULAR_EQUIPO`).
+3. El escritorio pregunta cada `intervaloSegundos`: `POST /api/escritorio/vinculaciones/estado`
+   `{"solicitud": "<secreto>"}` → **202** `{"estado":"PENDIENTE"}` · **200**
+   `{"estado":"APROBADA","token":"…","usuario":"enfermeria@…","nombre":"…","equipo":"Enfermería PC1"}`
+   (el token se entrega **una sola vez**) · **410** `{"codigo":"VINCULACION_EXPIRADA"}` si venció o ya se usó.
+4. Desde ahí, todas las rutas de abajo llevan `Authorization: Bearer <token del equipo>`.
+
+El equipo trabaja con las **escuelas de la cuenta que lo aprobó**: solo busca y envía alumnos de ellas.
+Las solicitudes se guardan en la tabla `vinculaciones_escritorio` (solo la huella SHA-256 del secreto),
+así que funciona aunque haya varias instancias del servidor.
+
+El token dura `ESCRITORIO_DIAS` (180) y va ligado a la cuenta que lo aprobó: deja de servir **al
+instante** si esa cuenta se desactiva, cambia su contraseña o su rol (se compara el `security_stamp`).
+Así se retira el acceso a un equipo. Las solicitudes duran 10 minutos.
+
+**401** `{"codigo":"EQUIPO_NO_VINCULADO"}` sin token, con uno inválido o revocado (se registra como `ACCESO_DENEGADO`).
+
+### `GET /api/escritorio/equipo`
+
+`{"equipo": "Enfermería PC1", "usuario": "enfermeria@eyesofter.mx", "nombre": "…", "rol": "SUPERVISOR"}` — para "Probar conexión".
 
 ### `POST /api/escritorio/tamizajes` (C-RFN-02)
 
@@ -353,7 +414,8 @@ El archivo se guarda **cifrado** en la base (C-RC-04). Al subirlo se avisa a Enf
 | **201** | Nuevo: `{"tamizajeId":"12","casoId":5,"casoFolio":"EYS-2026-0003","tutoresAvisados":1,"duplicado":false}` |
 | **200** | Ese `folio` ya se había recibido: `{"tamizajeId":"12","casoId":5,"duplicado":true}`. No se vuelve a notificar |
 | **400** | Falta folio o matrícula, semáforo distinto de `VERDE/AMARILLO/ROJO`, fecha futura o mal escrita, agudeza que no es `20/NN`, observaciones de más de 500 |
-| **422** | `{"error":"No hay ningún alumno con la matrícula …","codigo":"ALUMNO_DESCONOCIDO"}` — darlo de alta en el portal y reenviar |
+| **422** | `{"error":"No hay ningún alumno con la matrícula … en las escuelas de este equipo","codigo":"ALUMNO_DESCONOCIDO"}` — darlo de alta en el portal y reenviar |
+| **409** | `{"codigo":"MATRICULA_AMBIGUA"}` — la matrícula existe en más de una escuela del equipo (p. ej. lo vinculó el administrador global). Vincúlalo con una cuenta de una sola escuela |
 
 En una sola transacción: guarda el tamizaje cifrado, lo asigna a la **campaña vigente** del plantel,
 **abre caso** si es amarillo o rojo (o actualiza el caso abierto del alumno: uno por alumno), escribe
@@ -367,9 +429,11 @@ creciente; como el folio es idempotente, reenviar nunca duplica. Si sigue fallan
 `{"mensaje": "Sin conexión a internet", "pendientes": 12, "desde": "2026-11-19T08:00:00Z", "equipo": "Enfermería PC1"}`
 → **201** `{"enfermeriaAvisada": 2}`. Enfermería recibe `ALERTA_ENFERMERIA` "Falla de sincronización".
 
-### `GET /api/escritorio/alumnos[?q=]`
+### `GET /api/escritorio/alumnos?q=`
 
-Para validar la matrícula antes de capturar: `[{"matricula","nombre","apellidos","nivel","grado","grupo","usaLentes"}]` (máx. 500).
+**Búsqueda**, no listado: `q` obligatorio de al menos 3 caracteres (si no, **400**); `%` y `_` se buscan
+literalmente. Devuelve como máximo 20: `[{"matricula","nombre","apellidos","nivel","grado","grupo"}]`.
+Cada búsqueda queda en la bitácora con la cuenta que vinculó el equipo (`BUSCAR_ALUMNOS`).
 
 ---
 
@@ -380,6 +444,9 @@ Si cambias una, cámbiala en los dos (`eyesofterweb/Servicios/Expedientes.cs` y 
 | Regla | Valor |
 |---|---|
 | Bloqueo de cuenta | 3 fallos seguidos → 15 min (`access_failed_count`, `lockout_end`) |
+| Alcance por escuela | Personal: `usuario_planteles`; `administrador_global` = todas (`Seguridad/AlcanceEscuela.cs` y `Usuario.alcance`) |
+| Matrícula | Única por escuela (`plantel_id`, `matricula`) |
+| Convenio vigente | `activo` y (`vigente_hasta` nulo o ≥ hoy) para la escuela del alumno y la clínica |
 | Folio de caso | `EYS-AAAA-NNNN` |
 | Código del pase | 26 caracteres base32 sin letras confundibles (128 bits), un solo uso, 60 días |
 | Pase solo para | Clínica registrada, asociada y activa; lo valida un especialista de ESA clínica |
@@ -395,6 +462,8 @@ Si cambias una, cámbiala en los dos (`eyesofterweb/Servicios/Expedientes.cs` y 
 
 | Fecha | Cambio |
 |---|---|
+| 2026-11-21 (b) | **Varias escuelas.** El personal solo ve lo de sus escuelas (`usuario_planteles`; `administrador_global` ve todas); lo de otra escuela es 404. Alertas a la Enfermería de la escuela del alumno. Avisos y seguimiento por escuela. Reportes de fallas al administrador global. El escritorio trabaja con las escuelas de quien lo vinculó; matrícula única por escuela y nuevo **409** `MATRICULA_AMBIGUA`. Vinculaciones en la base. **Convenios:** `convenio` en `Optica`, `ClinicaDto` (con sesión de tutor) y `PaseDto`. |
+| 2026-11-21 | **Escritorio: adiós a `ESCRITORIO_API_KEY`.** Cada equipo se vincula en el navegador con una cuenta de Dirección o Enfermería (`/api/escritorio/vinculaciones`, `/escritorio/vincular`) y usa `Authorization: Bearer <token del equipo>`. `GET /api/escritorio/alumnos` exige `q` de 3+ caracteres, devuelve máx. 20 y ya no trae `usaLentes`. Nueva `GET /api/escritorio/equipo`. La bitácora registra quién envía y quién busca. |
 | 2026-11-20 | **Base PostgreSQL compartida con el portal.** Login con el correo y las cuentas de Identity (bloqueo compartido, 403 cuenta desactivada; el token deja de servir si se desactiva la cuenta o cambia la contraseña). `UserDto` agrega `id` y `requiereConsentimiento`. Nuevas: `/api/consentimiento`, `/api/clinicas`, destino/pase.png/citas (§9), `/api/reportes`, `/api/escritorio/incidencias` y `/alumnos`. `TamizajeDto` agrega `alumnoId`, `campana` y `caso` (pase, citas, línea de tiempo); ids numéricos en texto. **El escritorio manda `matricula` y agudezas en lugar de `alumnoNombre`/`tutorUsername`.** Comprobantes agregan `casoId` y `alumno`; `tutor` es el correo. `/opticas/cercanas` sale de la base: asociadas primero, agrega `tipo` y `horario`. `/salud` revisa la base y agrega `pendientesEnvio`. `GET /` responde JSON. |
 | 2026-11-19 (b) | `/salud` agrega `version`, `push`, `correo`, `escritorio`. Login responde 429 tras 3 fallos. Recetas y comprobantes. CORS permite `DELETE`. |
 | 2026-11-19 | El `token` del login es un JWT real. Notificaciones, confirmación de lectura, dispositivos, tamizajes, avisos, seguimiento y recepción desde el escritorio. |

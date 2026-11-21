@@ -26,7 +26,7 @@ class AppContainer(
 
     val sesionGuardada = SesionGuardada()
     val loginUseCase = LoginUseCase(authRepository)
-    val opticasApi = OpticasApi(httpClient)
+    val opticasApi = OpticasApi(httpClient) { sesionGuardada.leer()?.token }
     val almacen = AlmacenLocal()
 
     /** Sin sesión: para reportar una falla desde el login (C-RS-04). */

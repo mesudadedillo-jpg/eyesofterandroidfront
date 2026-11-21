@@ -17,4 +17,9 @@ data class Optica(
     /** Optica, Consultorio, Oftalmologia... */
     val tipo: String = "",
     val horario: String? = null,
+    /**
+     * Beneficio del convenio entre la escuela de tus hijos y esta clínica (p. ej. "20 % en armazones").
+     * Solo llega con la sesión de un tutor; null = sin convenio.
+     */
+    val convenio: String? = null,
 )

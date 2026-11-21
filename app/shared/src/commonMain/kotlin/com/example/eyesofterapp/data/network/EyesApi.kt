@@ -79,7 +79,7 @@ class EyesApi(
 
     /** Todo el directorio, también sin coordenadas (M-RFNN-05/06). */
     suspend fun clinicas(query: String? = null): ResultadoRed<List<ClinicaDto>> =
-        pedir { get("/api/clinicas") { query?.takeIf { it.isNotBlank() }?.let { parameter("query", it) } } }
+        pedir { get("/api/clinicas") { con(); query?.takeIf { it.isNotBlank() }?.let { parameter("query", it) } } }
 
     suspend fun consentimiento(): ResultadoRed<ConsentimientoDto> = pedir { get("/api/consentimiento") { con() } }
 

@@ -47,6 +47,7 @@ import com.example.eyesofterapp.composeApp.theme.EyesEtiqueta
 import com.example.eyesofterapp.composeApp.theme.EyesMotion
 import com.example.eyesofterapp.composeApp.theme.EyesOpcion
 import com.example.eyesofterapp.composeApp.theme.EyesPildora
+import com.example.eyesofterapp.composeApp.theme.EyesConvenio
 import com.example.eyesofterapp.composeApp.theme.EyesPildoraOptica
 import com.example.eyesofterapp.composeApp.theme.EyesSelector
 import com.example.eyesofterapp.composeApp.theme.EyesSelectorOpcion
@@ -359,6 +360,7 @@ fun OpticaCard(optica: Optica, onClick: (() -> Unit)? = null) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(optica.nombre, style = MaterialTheme.typography.titleMedium, color = EyesColors.Texto)
                 EyesPildoraOptica(optica.verificada)
+                EyesConvenio(optica.convenio)
             }
             if (optica.distanciaKm > 0.0) {
                 Text(

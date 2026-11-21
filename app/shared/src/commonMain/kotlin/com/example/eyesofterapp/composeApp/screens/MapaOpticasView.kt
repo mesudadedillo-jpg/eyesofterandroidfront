@@ -58,6 +58,7 @@ import com.example.eyesofterapp.composeApp.theme.EyesBotonTexto
 import com.example.eyesofterapp.composeApp.theme.EyesColors
 import com.example.eyesofterapp.composeApp.theme.EyesMotion
 import com.example.eyesofterapp.composeApp.theme.EyesPildora
+import com.example.eyesofterapp.composeApp.theme.EyesConvenio
 import com.example.eyesofterapp.composeApp.theme.EyesPildoraOptica
 import com.example.eyesofterapp.composeApp.theme.EyesShapes
 import com.example.eyesofterapp.composeApp.theme.EyesTarjeta
@@ -230,6 +231,7 @@ fun MapaOpticasView(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(optica.nombre, style = MaterialTheme.typography.titleMedium, color = EyesColors.Texto)
                         EyesPildoraOptica(optica.verificada)
+                        EyesConvenio(optica.convenio)
                     }
                     if (optica.distanciaKm > 0.0) {
                         Text(optica.distanciaTexto(), style = MaterialTheme.typography.titleSmall, color = EyesColors.Azul)

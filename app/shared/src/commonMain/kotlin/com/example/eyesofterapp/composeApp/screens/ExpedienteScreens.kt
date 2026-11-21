@@ -53,6 +53,7 @@ import com.example.eyesofterapp.composeApp.theme.EyesIconos
 import com.example.eyesofterapp.composeApp.theme.EyesMensaje
 import com.example.eyesofterapp.composeApp.theme.EyesOpcion
 import com.example.eyesofterapp.composeApp.theme.EyesPildora
+import com.example.eyesofterapp.composeApp.theme.EyesConvenio
 import com.example.eyesofterapp.composeApp.theme.EyesPildoraOptica
 import com.example.eyesofterapp.composeApp.theme.EyesSelector
 import com.example.eyesofterapp.composeApp.theme.EyesSelectorOpcion
@@ -165,6 +166,7 @@ private fun PaseMedico(t: TamizajeDto, pase: PaseDto, png: ByteArray?) {
         }
         Text(pase.clinicaNombre, style = MaterialTheme.typography.titleLarge, color = EyesColors.Texto)
         Text("${pase.clinicaDireccion} · Tel. ${pase.clinicaTelefono}", style = MaterialTheme.typography.bodySmall, color = EyesColors.TextoSecundario)
+        EyesConvenio(pase.convenio)
         Box(
             Modifier.fillMaxWidth().padding(vertical = 8.dp),
             contentAlignment = Alignment.Center
@@ -320,6 +322,7 @@ fun ElegirDestinoScreen(
                                 }
                                 Text(listOf(c.direccion, c.ciudad).filter { it.isNotBlank() }.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = EyesColors.TextoSecundario)
                                 if (c.asociada) Text("Con pase médico y código QR", style = MaterialTheme.typography.labelMedium, color = EyesColors.VerdeBg)
+                                EyesConvenio(c.convenio)
                             }
                         }
                     }

@@ -80,6 +80,8 @@ data class PaseDto(
     val clinicaDireccion: String = "",
     val clinicaTelefono: String = "",
     val urlValidacion: String = "",
+    /** Beneficio del convenio de la escuela con esta clínica. null = sin convenio. */
+    val convenio: String? = null,
 ) {
     val vigente: Boolean get() = estado == "VIGENTE"
 }
@@ -125,6 +127,8 @@ data class ClinicaDto(
     val lat: Double? = null,
     val lng: Double? = null,
     val asociada: Boolean = false,
+    /** Beneficio del convenio con la escuela de los hijos del tutor con sesión. */
+    val convenio: String? = null,
 )
 
 @Serializable

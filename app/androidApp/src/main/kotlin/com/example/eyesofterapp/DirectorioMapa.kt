@@ -607,6 +607,7 @@ private fun buscarOpticasOsm(centro: Coordenadas, radioM: Int = 8000): List<Opti
           nwr["shop"="optician"](around:$radioM,${centro.lat},${centro.lng});
           nwr["healthcare"="optometrist"](around:$radioM,${centro.lat},${centro.lng});
           nwr["amenity"="optician"](around:$radioM,${centro.lat},${centro.lng});
+          nwr["healthcare:speciality"~"ophthalmology|optometry"](around:$radioM,${centro.lat},${centro.lng});
         );
         out center 40;
     """.trimIndent()

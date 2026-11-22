@@ -3,6 +3,7 @@ package com.example.eyesofterapp
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
@@ -12,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.remember
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.eyesofterapp.location.AndroidLocationProvider
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,14 +28,29 @@ class MainActivity : ComponentActivity() {
     private val rutaPush = MutableStateFlow<String?>(null)
 
     private var alResponderPermiso: ((Boolean) -> Unit)? = null
+    private var negacionesSeguidas = 0
 
     private val pedirUbicacion = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permisos ->
+        // Basta con FINE o COARSE (en Android 12+ el usuario puede elegir "Aproximada").
         val concedido = permisos.values.any { it }
-        if (!concedido) {
-            // Sin permiso la app sigue funcionando: el mapa usa Tulancingo y ofrece abrir Ajustes.
-            Toast.makeText(this, "Sin permiso de ubicación: se muestra Tulancingo.", Toast.LENGTH_SHORT).show()
+        if (concedido) {
+            negacionesSeguidas = 0
+        } else {
+            negacionesSeguidas++
+            val puedeVolverAPreguntar = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                .any { ActivityCompat.shouldShowRequestPermissionRationale(this, it) }
+            if (!puedeVolverAPreguntar && negacionesSeguidas >= 2) {
+                // Android ya no muestra el diálogo: hay que activarlo a mano en Ajustes.
+                Toast.makeText(this, "Permiso de ubicación bloqueado. Actívalo en Ajustes > Permisos > Ubicación.", Toast.LENGTH_LONG).show()
+                runCatching {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = Uri.fromParts("package", packageName, null) })
+                }
+            } else {
+                // Sin permiso la app sigue funcionando: el mapa usa Tulancingo y ofrece abrir Ajustes.
+                Toast.makeText(this, "Sin permiso de ubicación: se muestra Tulancingo.", Toast.LENGTH_SHORT).show()
+            }
         }
         avisarResultado(concedido)
     }

@@ -39,6 +39,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -371,10 +373,15 @@ fun EyesBotonPrincipal(
         ),
         elevation = null,
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        modifier = modifier.presionable(interaccion).heightIn(min = 44.dp)
+        // 48 dp: alto mínimo recomendado para tocar con facilidad (Material / WCAG).
+        modifier = modifier.presionable(interaccion).heightIn(min = 48.dp)
     ) {
         if (cargando) {
-            CircularProgressIndicator(Modifier.size(18.dp), color = EyesColors.Azul, strokeWidth = 2.dp)
+            // TalkBack anuncia que la acción está en curso (p. ej. «Iniciar sesión, en curso»).
+            CircularProgressIndicator(
+                Modifier.size(18.dp).semantics { contentDescription = "$texto, en curso" },
+                color = EyesColors.Azul, strokeWidth = 2.dp
+            )
         } else {
             Text(texto, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
         }

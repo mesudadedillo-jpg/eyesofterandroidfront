@@ -1,11 +1,10 @@
 package com.example.eyesofterapp
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -14,7 +13,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
-import androidx.core.location.LocationManagerCompat
 import com.example.eyesofterapp.location.AndroidLocationProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -41,23 +39,26 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun avisarResultado(concedido: Boolean) {
-        if (concedido) {
-            val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            if (!LocationManagerCompat.isLocationEnabled(lm)) {
-                Toast.makeText(this, "La ubicación del teléfono está apagada. Actívala desde los ajustes rápidos.", Toast.LENGTH_LONG).show()
-            }
-        }
-        alResponderPermiso?.invoke(concedido)
+        val alResponder = alResponderPermiso
         alResponderPermiso = null
+        alResponder?.invoke(concedido)
     }
 
     /** Lo usa AndroidLocationProvider cuando el ViewModel pide la ubicación. */
     fun solicitarPermisosUbicacion(alResponder: (Boolean) -> Unit) {
+        // Si había una solicitud pendiente, la cerramos para que su corrutina no quede colgada.
+        alResponderPermiso?.invoke(false)
         alResponderPermiso = alResponder
         val yaConcedido = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             .any { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
         if (yaConcedido) avisarResultado(true)
         else pedirUbicacion.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
+
+    /** Lo llama AndroidLocationProvider cuando la ubicación del sistema está apagada. */
+    private fun abrirAjustesDeUbicacion() {
+        Toast.makeText(this, "La ubicación del teléfono está apagada. Actívala y vuelve a la app.", Toast.LENGTH_LONG).show()
+        runCatching { startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,7 +69,13 @@ class MainActivity : ComponentActivity() {
         rutaPush.value = intent?.getStringExtra(EXTRA_RUTA)
 
         setContent {
-            val ubicacion = remember { AndroidLocationProvider(context = this, requestPermission = ::solicitarPermisosUbicacion) }
+            val ubicacion = remember {
+                AndroidLocationProvider(
+                    context = this,
+                    requestPermission = ::solicitarPermisosUbicacion,
+                    onUbicacionApagada = ::abrirAjustesDeUbicacion,
+                )
+            }
             App(
                 locationProvider = ubicacion,
                 telefono = telefono,

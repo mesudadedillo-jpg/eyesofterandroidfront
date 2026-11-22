@@ -87,6 +87,7 @@ import com.example.eyesofterapp.composeApp.theme.EyesSelectorOpcion
 import com.example.eyesofterapp.composeApp.theme.EyesShapes
 import com.example.eyesofterapp.composeApp.theme.EyesTarjeta
 import com.example.eyesofterapp.domain.model.Coordenadas
+import com.example.eyesofterapp.domain.model.FUENTE_OSM
 import com.example.eyesofterapp.domain.model.Optica
 import com.example.eyesofterapp.domain.model.distanciaHaversineKm
 import com.example.eyesofterapp.ui.OpticasUiState
@@ -176,17 +177,20 @@ fun DirectorioMapa(
         }
         // Si una óptica de OSM está a menos de 80 m de una del catálogo, es la misma.
         val extra = osm.filter { e -> catalogo.none { distanciaHaversineKm(it.lat, it.lng, e.lat, e.lng) < 0.08 } }
-        val todas = (catalogo.map { Clinica("c${it.id}", it, false) } + extra.map { Clinica("o${it.id}", it, true) })
-        todas.filter {
-            when (filtro) {
-                Filtro.Todas -> true
-                Filtro.Asociadas -> it.optica.verificada
-                Filtro.Cerca -> it.optica.distanciaKm in 0.001..5.0
+        // OpticasApi ya mezcla las del servidor con las de OpenStreetMap (fuente = FUENTE_OSM).
+        val todas = catalogo.map { if (it.fuente == FUENTE_OSM) Clinica("s${it.id}", it, true) else Clinica("c${it.id}", it, false) } +
+            extra.map { Clinica("o${it.id}", it, true) }
+        todas.distinctBy { it.clave }
+            .filter {
+                when (filtro) {
+                    Filtro.Todas -> true
+                    Filtro.Asociadas -> it.optica.verificada
+                    Filtro.Cerca -> it.optica.distanciaKm in 0.001..5.0
+                }
+            }.let { lista ->
+                val orden = lista.map { it.optica }.ordenDirectorio()
+                orden.map { o -> lista.first { it.optica === o } }
             }
-        }.let { lista ->
-            val orden = lista.map { it.optica }.ordenDirectorio()
-            orden.map { o -> lista.first { it.optica === o } }
-        }
     }
 
     val pager = rememberPagerState { clinicas.size }

@@ -42,6 +42,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import com.example.eyesofterapp.data.network.URL_PORTAL
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -143,7 +147,7 @@ fun LoginScreen(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.18.em,
                     color = EyesColors.Blanco,
-                    modifier = Modifier.aparecer(retrasoExtraMs = 180)
+                    modifier = Modifier.aparecer(retrasoExtraMs = 180).semantics { heading() }
                 )
             }
         }
@@ -227,7 +231,13 @@ fun LoginScreen(
                 exit = shrinkVertically(tween(EyesMotion.Salida, easing = EyesMotion.EaseOut)) +
                     fadeOut(tween(EyesMotion.Salida))
             ) {
-                Text(text = state.error ?: "", color = EyesColors.RojoBg, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = state.error ?: "",
+                    color = EyesColors.RojoBg,
+                    style = MaterialTheme.typography.bodyMedium,
+                    // TalkBack lee el error en cuanto aparece
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                )
             }
 
             Spacer(Modifier.height(4.dp))

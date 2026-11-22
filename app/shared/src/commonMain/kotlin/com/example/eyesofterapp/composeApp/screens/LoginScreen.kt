@@ -1,20 +1,11 @@
 package com.example.eyesofterapp.composeApp.screens
 
- feat/opticas-osm
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-main
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,6 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import com.example.eyesofterapp.data.network.URL_PORTAL
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,18 +77,20 @@ import com.example.eyesofterapp.ui.AuthUiState
 @Composable
 fun LoginScreen(
     state: AuthUiState,
-    onLogin: (username: String, password: String) -> Unit
+    onLogin: (username: String, password: String, codigo: String?) -> Unit
 ) {
     // rememberSaveable: conserva lo escrito aunque se rote el teléfono
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
+    // Verificación en dos pasos: el código no se guarda al rotar (vence en segundos).
+    var codigo by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
     // Lo usan el botón y la tecla "Listo" del teclado
     fun submit() {
         focusManager.clearFocus()
-        onLogin(username, password)
+        onLogin(username, password, codigo.takeIf { state.pideCodigo && it.isNotBlank() })
     }
 
     // Colores de los campos: borde fino que se vuelve azul al escribir.
@@ -117,45 +117,12 @@ fun LoginScreen(
         // Panel de arriba: las bandas diagonales de la web detrás del logo y el nombre.
         // Llega hasta el borde superior (detrás de la barra de estado).
         Box(
- feat/opticas-osm
-            modifier = Modifier
-                .size(88.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-                .semantics { contentDescription = "Logotipo de EYESOFTER" },
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "E",
-                color = MaterialTheme.colorScheme.onPrimary,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "EYESOFTER Suite",
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text("Inicia sesión para continuar", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth().widthIn(max = 420.dp),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-
             modifier = Modifier.fillMaxWidth().height(340.dp),
             contentAlignment = Alignment.Center
         ) {
             // Animación de entrada (se ve una vez al abrir la app), en este orden:
             // bandas (fundido) → logo (rebote suave) → nombre → formulario.
             EyesBandas(Modifier.matchParentSize().aparecer(desplazamiento = 0.dp))
-          main
             Column(
                 modifier = Modifier.statusBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -180,7 +147,7 @@ fun LoginScreen(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 0.18.em,
                     color = EyesColors.Blanco,
-                    modifier = Modifier.aparecer(retrasoExtraMs = 180)
+                    modifier = Modifier.aparecer(retrasoExtraMs = 180).semantics { heading() }
                 )
             }
         }
@@ -197,26 +164,34 @@ fun LoginScreen(
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
-                label = { Text("Usuario") },
+                label = { Text("Correo electrónico") },
                 singleLine = true,
                 isError = state.error != null,
                 shape = EyesShapes.Boton,
                 colors = coloresCampo,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(
                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
 
-                // Solo aparece si el ViewModel puso un mensaje de error
-                state.error?.let { message ->
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        // TalkBack lee el error en cuanto aparece
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Contraseña") },
+                singleLine = true,
+                isError = state.error != null,
+                shape = EyesShapes.Boton,
+                colors = coloresCampo,
+                // Solo cambia CÓMO se ve (puntos); el texto real sigue en "password"
+                visualTransformation = if (showPassword) VisualTransformation.None
+                else PasswordVisualTransformation(),
+                trailingIcon = {
+                    EyesBotonTexto(
+                        texto = if (showPassword) "Ocultar" else "Mostrar",
+                        onClick = { showPassword = !showPassword },
+                        color = EyesColors.Azul
                     )
                 },
                 keyboardOptions = KeyboardOptions(
@@ -227,20 +202,42 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-                Button(
-                    onClick = { submit() },
-                    enabled = !state.isLoading, // evita doble clic mientras espera al servidor
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(
-                            Modifier.size(20.dp).semantics { contentDescription = "Iniciando sesión" },
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text("Iniciar sesión")
-                    }
-                }
+            // Verificación en dos pasos (personal escolar): el código de la app autenticadora.
+            if (state.pideCodigo) {
+                Text(
+                    "Tu cuenta tiene verificación en dos pasos. Abre tu app autenticadora y escribe el código de EYESOFTER.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = EyesColors.TextoSecundario
+                )
+                OutlinedTextField(
+                    value = codigo,
+                    onValueChange = { nuevo -> codigo = nuevo.filter(Char::isDigit).take(6) },
+                    label = { Text("Código de 6 dígitos") },
+                    singleLine = true,
+                    shape = EyesShapes.Boton,
+                    colors = coloresCampo,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Solo aparece si el ViewModel puso un mensaje de error. Se despliega
+            // (en vez de aparecer de golpe) para que el botón no "salte" hacia abajo.
+            AnimatedVisibility(
+                visible = state.error != null,
+                enter = expandVertically(tween(EyesMotion.Entrada, easing = EyesMotion.EaseOut)) +
+                    fadeIn(tween(EyesMotion.Entrada, easing = EyesMotion.EaseOut)),
+                exit = shrinkVertically(tween(EyesMotion.Salida, easing = EyesMotion.EaseOut)) +
+                    fadeOut(tween(EyesMotion.Salida))
+            ) {
+                Text(
+                    text = state.error ?: "",
+                    color = EyesColors.RojoBg,
+                    style = MaterialTheme.typography.bodyMedium,
+                    // TalkBack lee el error en cuanto aparece
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                )
             }
 
             Spacer(Modifier.height(4.dp))
@@ -253,6 +250,29 @@ fun LoginScreen(
                 cargando = state.isLoading,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // C-RFNN-02: la recuperación la hace el portal (manda el enlace al correo registrado).
+            val uri = LocalUriHandler.current
+            EyesBotonTexto(
+                texto = "¿Olvidaste tu contraseña?",
+                onClick = { uri.openUri("$URL_PORTAL/Cuenta/Olvide") },
+                color = EyesColors.Azul,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
+
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Tu cuenta te la da la escuela. Es la misma del portal web.",
+            style = MaterialTheme.typography.bodySmall, color = EyesColors.TextoTenue,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
+        val uriPie = LocalUriHandler.current
+        androidx.compose.foundation.layout.Row {
+            EyesBotonTexto("Aviso de privacidad", onClick = { uriPie.openUri("$URL_PORTAL/Privacidad/Aviso") })
+            EyesBotonTexto("Ayuda", onClick = { uriPie.openUri("$URL_PORTAL/Soporte/Ayuda") })
+        }
+        EyesBotonTexto("Tu información está segura", onClick = { uriPie.openUri("$URL_PORTAL/Privacidad/Seguridad") })
+        Spacer(Modifier.height(16.dp))
     }
 }

@@ -12,9 +12,13 @@ enum class Role {
 
 
 data class User(
+    /** Correo de la cuenta (las mismas cuentas del portal web). */
     val username: String,
     val fullName: String,
-    val role: Role
+    val role: Role,
+    val id: String = "",
+    /** Tutor que aún no acepta el aviso de privacidad vigente (C-RC-08). */
+    val requiereConsentimiento: Boolean = false,
 )
 
 
@@ -23,4 +27,13 @@ data class Session(
     val user: User
 )
 
-class InvalidCredentialsException : Exception("Usuario o contraseña incorrectos")
+class InvalidCredentialsException : Exception("Correo o contraseña incorrectos")
+
+/** El servidor rechazó la petición con un motivo que se le muestra al usuario tal cual (p. ej. cuenta bloqueada). */
+class RechazoDelServidorException(mensaje: String) : Exception(mensaje)
+
+/**
+ * La cuenta tiene verificación en dos pasos: falta el código de la app autenticadora
+ * ([invalido] = se mandó uno y no era correcto).
+ */
+class RequiereCodigoException(mensaje: String, val invalido: Boolean) : Exception(mensaje)

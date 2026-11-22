@@ -1,10 +1,5 @@
 package com.example.eyesofterapp.composeApp.screens
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +26,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -39,10 +36,10 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,10 +58,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.eyesofterapp.composeApp.theme.EyesConvenio
 import com.example.eyesofterapp.domain.model.FUENTE_OSM
 import com.example.eyesofterapp.domain.model.Optica
 import com.example.eyesofterapp.ui.OpticasUiState
-import kotlin.math.roundToLong
 
 /** Altura mínima recomendada para que un botón sea fácil de tocar (Material / WCAG). */
 private val ALTO_TOQUE = 48.dp
@@ -79,13 +76,13 @@ fun OpticasScreen(
     onBuscarPorCiudad: (String) -> Unit,
     onActualizarBusquedaTexto: (String) -> Unit,
     onVolver: () -> Unit,
-    onAbrirMapaEnVivo: (() -> Unit)? = null
+    soloAsociadasInicial: Boolean = false,
 ) {
     // La lista es la vista inicial: es la más cómoda en teléfono y con lector de pantalla.
     var vistaMapa by rememberSaveable { mutableStateOf(false) }
     var seleccionadaId by remember { mutableStateOf<Int?>(null) }
     var filtroDistanciaKm by rememberSaveable { mutableStateOf<Double?>(null) }
-    var filtroTipo by rememberSaveable { mutableStateOf(FiltroTipo.TODAS) }
+    var filtroTipo by rememberSaveable { mutableStateOf(if (soloAsociadasInicial) FiltroTipo.ASOCIADAS else FiltroTipo.TODAS) }
 
     LaunchedEffect(Unit) {
         if (state.opticas.isEmpty() && state.error == null && !state.cargando) {
@@ -102,7 +99,7 @@ fun OpticasScreen(
                 FiltroTipo.OTRAS -> !optica.verificada
             }
             cumpleDistancia && cumpleTipo
-        }
+        }.ordenDirectorio()
     }
     val seleccionada = opticasFiltradas.firstOrNull { it.id == seleccionadaId } ?: opticasFiltradas.firstOrNull()
 
@@ -135,87 +132,6 @@ fun OpticasScreen(
             if (state.cargando) {
                 item(key = "cargando") { Cargando() }
             }
-            state.coordenadasGps?.let { coords ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.tertiaryContainer
-                                         else MaterialTheme.colorScheme.secondaryContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (state.esUbicacionSimulada)
-                                    "🎯 GPS simulado: ${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}"
-                                else
-                                    "📡 GPS real: ${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.onTertiaryContainer
-                                       else MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = if (state.esUbicacionSimulada)
-                                    "Ubicación de demostración (Tulancingo, Hgo). NO viene del sensor."
-                                else buildString {
-                                    append(if (state.esUltimaConocida) "Última posición conocida" else "Lectura del sensor")
-                                    state.proveedorGps?.let { append(" ($it)") }
-                                    state.precisionMetros?.let { append(" · precisión ±${it.toInt()} m") }
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.onTertiaryContainer
-                                       else MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        if (state.esUbicacionSimulada) {
-                            Button(onClick = onSolicitarUbicacion) {
-                                Text("📍 GPS Real", fontSize = 11.sp)
-                // Estado del GPS: píldora (real o simulado) + coordenadas + acción para cambiar.
-                state.coordenadasGps?.let { coords ->
-                    EyesTarjeta(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                if (state.esUbicacionSimulada) {
-                                    EyesPildora("Ubicación simulada", EyesColors.AmarilloBg, EyesColors.AmarilloFg)
-                                } else {
-                                    EyesPildora("GPS real activo", EyesColors.VerdeBg, EyesColors.VerdeFg)
-                                }
-                                Text(
-                                    text = "${coords.lat.cuatroDecimales()}, ${coords.lng.cuatroDecimales()}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = EyesColors.TextoSecundario
-                                )
-                                Text(
-                                    text = if (state.esUbicacionSimulada)
-                                        "Punto de demostración en Tulancingo, Hgo., para probar el sensor."
-                                    else
-                                        "Coordenadas obtenidas del sensor de posicionamiento.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = EyesColors.TextoTenue
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            if (state.esUbicacionSimulada) {
-                                EyesBotonFantasma("Usar GPS", onClick = onSolicitarUbicacion)
-                            } else {
-                                EyesBotonFantasma("Simular", onClick = onSimularUbicacion)
-                            }
-                        }
-                    }
-                }
 
             state.error?.let { mensaje ->
                 item(key = "error") {
@@ -226,6 +142,7 @@ fun OpticasScreen(
                         onSimular = onSimularUbicacion
                     )
                 }
+            }
 
             if (!state.cargando) {
                 item(key = "resumen") { Resumen(opticasFiltradas.size, state) }
@@ -501,10 +418,6 @@ private fun Resumen(cantidad: Int, state: OpticasUiState) {
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
     )
 }
-private fun formatoCoord(valor: Double): String =
-    ((valor * 100_000).toLong() / 100_000.0).toString()
-/** Coordenada con 4 decimales (unos 11 m de precisión), por ejemplo 20.0825. */
-private fun Double.cuatroDecimales(): String = ((this * 10_000).roundToLong() / 10_000.0).toString()
 
 @Composable
 private fun EstadoVacio(hayFiltros: Boolean) {
@@ -587,6 +500,7 @@ fun OpticaCard(
                 fondo = if (optica.verificada) Color(0xFFDDF1E1) else MaterialTheme.colorScheme.surfaceVariant,
                 texto2 = if (optica.verificada) Color(0xFF14532D) else MaterialTheme.colorScheme.onSurfaceVariant
             )
+            EyesConvenio(optica.convenio)
 
             val lineaDireccion = listOf(optica.direccion, optica.ciudad, optica.codigoPostal)
                 .filter { it.isNotBlank() }
@@ -596,7 +510,6 @@ fun OpticaCard(
             if (optica.horario.isNotBlank()) {
                 Text("Horario: ${optica.horario}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        }
 
             Spacer(Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -660,6 +573,13 @@ private fun abrir(uri: androidx.compose.ui.platform.UriHandler, url: String) {
         // Sin app para abrir el enlace (por ejemplo, "tel:" en una tablet sin teléfono).
     }
 }
+
+/**
+ * Orden del directorio (M-RFN-07): primero las clínicas asociadas al programa y,
+ * dentro de cada grupo, de la más cercana a la más lejana (0.0 = sin distancia, al final).
+ */
+fun List<Optica>.ordenDirectorio(): List<Optica> =
+    sortedWith(compareByDescending<Optica> { it.verificada }.thenBy { if (it.distanciaKm > 0.0) it.distanciaKm else Double.MAX_VALUE })
 
 internal fun formatoDistancia(km: Double): String =
     if (km < 1.0) "${((km * 1000).toInt() / 10) * 10} m"

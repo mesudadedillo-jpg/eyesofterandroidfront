@@ -9,6 +9,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -325,6 +327,17 @@ fun EyesPildoraOptica(verificada: Boolean) {
     }
 }
 
+/** Beneficio del convenio entre la escuela del alumno y la clínica. Texto, no solo color (accesible). */
+@Composable
+fun EyesConvenio(beneficio: String?) {
+    if (beneficio.isNullOrBlank()) return
+    Text(
+        "Convenio con tu escuela: $beneficio",
+        style = MaterialTheme.typography.labelMedium,
+        color = EyesColors.VerdeBg,
+    )
+}
+
 /** Etiqueta pequeña en mayúsculas que va arriba de un título ("eyebrow"). */
 @Composable
 fun EyesEtiqueta(texto: String, color: Color = EyesColors.Azul) {
@@ -441,7 +454,9 @@ fun EyesOpcion(texto: String, seleccionada: Boolean, onClick: () -> Unit, modifi
             .clip(forma)
             .background(fondo)
             .border(BorderStroke(1.dp, borde), forma)
-            .clickable(onClick = onClick)
+            // Accesibilidad: TalkBack anuncia "seleccionado" y el área táctil mide al menos 48 dp.
+            .selectable(selected = seleccionada, role = Role.RadioButton, onClick = onClick)
+            .heightIn(min = 48.dp)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -479,7 +494,8 @@ fun RowScope.EyesSelectorOpcion(texto: String, seleccionada: Boolean, onClick: (
         modifier = Modifier
             .clip(forma)
             .background(fondo)
-            .clickable(onClick = onClick)
+            .selectable(selected = seleccionada, role = Role.Tab, onClick = onClick)
+            .heightIn(min = 44.dp)
             .padding(horizontal = 16.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {

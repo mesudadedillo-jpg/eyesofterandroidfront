@@ -23,3 +23,9 @@ package com.example.eyesofterapp.data.network
 // ---------------------------------------------------------------------------
 
 const val BASE_URL = "https://eyesofterandroid-production.up.railway.app"
+
+/**
+ * Portal web (eyesofterweb): recuperación de contraseña (C-RFNN-02), aviso de privacidad
+ * y términos (C-RS-07). Comparte cuentas y base con el servidor de la app.
+ */
+const val URL_PORTAL = "https://eyesofterweb-production.up.railway.app"

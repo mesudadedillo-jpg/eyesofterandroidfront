@@ -6,7 +6,8 @@ sealed interface ResultadoRed<out T> {
     data class ServidorInalcanzable(val url: String) : ResultadoRed<Nothing>
     data class Timeout(val url: String) : ResultadoRed<Nothing>
     data class ErrorServidor(val codigo: Int, val mensaje: String = "Error en el servidor ($codigo)") : ResultadoRed<Nothing>
-    data class ErrorCliente(val codigo: Int, val mensaje: String = "Credenciales o solicitud inválida ($codigo)") : ResultadoRed<Nothing>
+    /** [clave]: el "codigo" que manda el servidor (p. ej. REQUIERE_2FA) para reaccionar sin leer el texto. */
+    data class ErrorCliente(val codigo: Int, val mensaje: String = "Credenciales o solicitud inválida ($codigo)", val clave: String? = null) : ResultadoRed<Nothing>
     data class Desconocido(val excepcion: Throwable) : ResultadoRed<Nothing>
 
     fun aMensajeUsuario(): String = when (this) {
@@ -15,7 +16,7 @@ sealed interface ResultadoRed<out T> {
         is ServidorInalcanzable -> "No se puede conectar al servidor ($url). Revisa que esté encendido."
         is Timeout -> "El servidor tardó demasiado en responder ($url)."
         is ErrorServidor -> "Error interno en el servidor ($codigo)."
-        is ErrorCliente -> "Usuario o contraseña incorrectos."
+        is ErrorCliente -> mensaje
         is Desconocido -> "Error inesperado: ${excepcion.message ?: "Sin detalles"}"
     }
 }

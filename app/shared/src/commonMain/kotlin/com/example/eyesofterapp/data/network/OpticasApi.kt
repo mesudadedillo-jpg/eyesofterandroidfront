@@ -5,20 +5,19 @@ import com.example.eyesofterapp.domain.model.Optica
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlin.math.asin
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
-import kotlin.math.sqrt
-import com.example.eyesofterapp.domain.model.distanciaHaversineKm
 
-class OpticasApi(private val client: HttpClient) {
+/**
+ * Directorio de ópticas para el mapa. La ruta es pública; si hay sesión se manda el token para
+ * que el servidor agregue el convenio de la escuela de los hijos del tutor (campo `convenio`).
+ */
+class OpticasApi(private val client: HttpClient, private val token: () -> String? = { null }) {
 
     private val opticasCatalogo = listOf(
         Optica(1, "Óptica Tulancingo Centro", "Av. Juárez 102, Centro", "Tulancingo", "43600", 20.0825, -98.3622, 1.2, "7757531234", true),
@@ -47,6 +46,7 @@ class OpticasApi(private val client: HttpClient) {
         val delServidor = async {
             ejecutarPeticion {
                 client.get("/opticas/cercanas") {
+                    token()?.let { bearerAuth(it) }
                     parameter("lat", lat)
                     parameter("lng", lng)
                 }
@@ -99,6 +99,7 @@ class OpticasApi(private val client: HttpClient) {
     suspend fun getOpticasPorCiudadOZip(query: String): ResultadoRed<List<Optica>> {
         val resultado = ejecutarPeticion {
             client.get("/opticas/cercanas") {
+                token()?.let { bearerAuth(it) }
                 parameter("query", query)
                 parameter("ciudad", query)
                 parameter("cp", query)
@@ -172,23 +173,4 @@ class OpticasApi(private val client: HttpClient) {
         const val RADIO_MAX_ASOCIADAS_KM = 50.0
         const val MAX_RESULTADOS = 80
     }
-    private fun calcularHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0
-        val pi = kotlin.math.PI
-        val dLat = (lat2 - lat1) * pi / 180.0
-        val dLon = (lon2 - lon1) * pi / 180.0
-        val radLat1 = lat1 * pi / 180.0
-        val radLat2 = lat2 * pi / 180.0
-
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(radLat1) * cos(radLat2) *
-                sin(dLon / 2) * sin(dLon / 2)
-        // Haversine usa asin (con acos todas las distancias salían ~20,000 km).
-        val c = 2 * asin(min(1.0, sqrt(a)))
-        return r * c
-    }
-    // Usa la fórmula compartida (domain/model/Coordenadas.kt). Antes aquí había
-    // una copia con acos en lugar de asin, que daba distancias incorrectas.
-    private fun calcularHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double =
-        distanciaHaversineKm(lat1, lon1, lat2, lon2)
 }

@@ -16,7 +16,7 @@ La sesión se guarda en el teléfono: no hay que escribir la contraseña cada ve
 - **Repositorio:** `https://github.com/mesudadedillo-jpg/eyesofterandroidfront`
 - **Servidor que usa:** proyecto `eyesofter-backend`, repositorio
   `https://github.com/mesudadedillo-jpg/eyesofterandroid`, desplegado en
-  `https://eyesofterandroid-production.up.railway.app`
+  `https://eyesofter-api.up.railway.app`
 - **Contrato con el servidor:** [`docs/API.md`](docs/API.md)
 
 Hasta noviembre de 2026 la app y el servidor vivían juntos en un solo proyecto
@@ -201,12 +201,12 @@ Toda la app usa **una sola URL**, definida en
 `app/shared/src/commonMain/kotlin/com/example/eyesofterapp/data/network/PlatformConfig.kt`:
 
 ```kotlin
-const val BASE_URL = "https://eyesofterandroid-production.up.railway.app"
+const val BASE_URL = "https://eyesofter-api.up.railway.app"
 ```
 
 | Para probar contra… | Valor de `BASE_URL` |
 |---|---|
-| Railway (normal) | `https://eyesofterandroid-production.up.railway.app` |
+| Railway (normal) | `https://eyesofter-api.up.railway.app` |
 | Tu PC, desde el emulador | `http://10.0.2.2:8080` |
 | Tu PC, desde un teléfono físico | `http://<IP-de-tu-PC>:8080` (verla con `ipconfig`) |
 

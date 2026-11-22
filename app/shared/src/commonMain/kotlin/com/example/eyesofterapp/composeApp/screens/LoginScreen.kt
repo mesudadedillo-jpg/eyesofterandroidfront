@@ -77,7 +77,9 @@ import com.example.eyesofterapp.ui.AuthUiState
 @Composable
 fun LoginScreen(
     state: AuthUiState,
-    onLogin: (username: String, password: String, codigo: String?) -> Unit
+    onLogin: (username: String, password: String, codigo: String?) -> Unit,
+    /** Abre "¿Olvidaste tu contraseña?" dentro de la app. */
+    onOlvide: () -> Unit = {},
 ) {
     // rememberSaveable: conserva lo escrito aunque se rote el teléfono
     var username by rememberSaveable { mutableStateOf("") }
@@ -251,11 +253,10 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // C-RFNN-02: la recuperación la hace el portal (manda el enlace al correo registrado).
-            val uri = LocalUriHandler.current
+            // C-RFNN-02: código de 6 dígitos al correo o al celular, sin salir de la app.
             EyesBotonTexto(
                 texto = "¿Olvidaste tu contraseña?",
-                onClick = { uri.openUri("$URL_PORTAL/Cuenta/Olvide") },
+                onClick = onOlvide,
                 color = EyesColors.Azul,
                 modifier = Modifier.fillMaxWidth()
             )

@@ -246,7 +246,7 @@ Si el servidor no responde, el directorio muestra lo último guardado.
 | C-RC-02 Cambios visibles en < 5 s | bandeja cada 5 s en `PanelViewModel` |
 | C-RC-03 Solo HTTPS en release | `AndroidManifest.xml` (`usesCleartextTraffic` = `false` en release) |
 | C-RC-08 / C-RS-07 Aviso de privacidad aceptado antes de ver datos | `AyudaScreens.kt` → `ConsentimientoScreen` |
-| C-RFNN-02 Recuperar contraseña (portal) | Enlace en el login |
+| C-RFNN-02 Recuperar contraseña | "¿Olvidaste tu contraseña?" en el login: código al correo o SMS (`RecuperarPasswordScreen`) |
 | M-RS-01 Guía rápida · C-RS-04 Reportar una falla | `AyudaScreens.kt` |
 
 Capturas de todas las pantallas: [`docs/capturas/`](docs/capturas/).

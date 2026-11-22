@@ -166,9 +166,49 @@ código sirve en los dos. **Es obligatoria para Dirección y Enfermería**; opci
 ```
 
 - La contraseña se verifica contra el hash PBKDF2-HMAC-SHA512 de Identity (C-RC-05).
-- **¿Olvidaste tu contraseña?** (C-RFNN-02): la app abre `{URL_PORTAL}/Cuenta/Olvide` en el navegador;
-  el portal manda el enlace al correo registrado.
+- **¿Olvidaste tu contraseña?** (C-RFNN-02): pantalla propia de la app con código al correo o SMS (§3.1).
 - `requiereConsentimiento: true` → antes de cualquier otra cosa, mostrar el aviso de privacidad (§4).
+
+### 3.1 "¿Olvidaste tu contraseña?" — sin sesión (C-RFNN-02)
+
+Código de 6 dígitos al **correo** (Resend, gratis) o, si el servidor tiene Twilio configurado, por **SMS**
+al celular. Las reglas y la tabla (`codigos_recuperacion`) son las MISMAS del portal: un código pedido
+en la app sirve en `{URL_PORTAL}/Cuenta/IngresarCodigo` y al revés.
+
+`POST /api/recuperar/solicitar`
+
+```json
+{ "cuenta": "tutor@eyesofter.mx" }
+```
+
+`cuenta` es el correo o un celular de 10 dígitos (acepta espacios, guiones y `+52`). El celular se busca
+en el teléfono del tutor que representa la cuenta (o en `phone_number`); si es de varias cuentas no se
+manda nada y hay que usar el correo. Sin SMS configurado, a quien escribe su celular le llega al correo.
+
+| Código | Cuándo | Cuerpo |
+|---|---|---|
+| 202 | Siempre (exista o no la cuenta: no revela quién está registrado) | `{"mensaje": "Si los datos corresponden a una cuenta, te enviamos un código…", "canal": "correo", "minutosVigencia": 10}` |
+| 400 | No parece correo ni celular | `{"error": "Escribe tu correo o tu celular de 10 dígitos."}` |
+
+`POST /api/recuperar/restablecer`
+
+```json
+{ "cuenta": "tutor@eyesofter.mx", "codigo": "123456", "password": "NuevaClave2026" }
+```
+
+| Código | Cuándo | Cuerpo |
+|---|---|---|
+| 204 | Contraseña cambiada | — |
+| 400 | Código equivocado (dice cuántos intentos quedan) | `{"error": "El código no es correcto. Te quedan 4 intentos.", "codigo": "CODIGO_INCORRECTO"}` |
+| 400 | No hay código vigente: venció, ya se usó, se pidió otro o se agotaron los 5 intentos | `{"error": "El código no es válido o ya venció. Pide uno nuevo.", "codigo": "CODIGO_VENCIDO"}` |
+| 400 | La contraseña no cumple las reglas del portal (el código **no** se gasta) | `{"error": "La contraseña debe incluir…", "codigo": "PASSWORD_INVALIDA"}` |
+
+- Vence en **10 minutos**, **5 intentos** por código; pedir otro anula el anterior.
+- Máximo **1 código por minuto y 5 por hora** por cuenta (además del límite por IP de `/api/login`).
+- Solo se guarda la huella HMAC-SHA256 del código con `EYESOFTER_CLAVE_DATOS`, nunca el código.
+- Al cambiarla se renueva el `security_stamp`: **se cierran las sesiones abiertas** en la app y en el portal,
+  y se quita el bloqueo por intentos fallidos.
+- **No quita la verificación en dos pasos**: el personal sigue necesitando su app autenticadora para entrar.
 
 ## 4. Aviso de privacidad (C-RC-08, C-RS-07) 🔒
 

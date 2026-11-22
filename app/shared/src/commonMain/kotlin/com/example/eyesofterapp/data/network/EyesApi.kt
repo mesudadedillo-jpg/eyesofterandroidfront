@@ -1,6 +1,9 @@
 package com.example.eyesofterapp.data.network
 
 import com.example.eyesofterapp.data.model.AceptarConsentimientoDto
+import com.example.eyesofterapp.data.model.CodigoSolicitadoDto
+import com.example.eyesofterapp.data.model.RestablecerPasswordDto
+import com.example.eyesofterapp.data.model.SolicitarCodigoDto
 import com.example.eyesofterapp.data.model.AvisoEntradaDto
 import com.example.eyesofterapp.data.model.CitaCreadaDto
 import com.example.eyesofterapp.data.model.CitaEntradaDto
@@ -126,6 +129,16 @@ class EyesApi(
 
     suspend fun archivoComprobante(id: String): ResultadoRed<ByteArray> = bytes("/api/comprobantes/$id/archivo")
 
+    // --- "¿Olvidaste tu contraseña?" (sin sesión, §3.1) ---
+
+    suspend fun solicitarCodigo(cuenta: String): ResultadoRed<CodigoSolicitadoDto> = pedir {
+        post("/api/recuperar/solicitar") { contentType(ContentType.Application.Json); setBody(SolicitarCodigoDto(cuenta)) }
+    }
+
+    suspend fun restablecerPassword(cuenta: String, codigo: String, password: String): ResultadoRed<Unit> = pedirSinCuerpo {
+        post("/api/recuperar/restablecer") { contentType(ContentType.Application.Json); setBody(RestablecerPasswordDto(cuenta, codigo, password)) }
+    }
+
     private suspend fun bytes(ruta: String): ResultadoRed<ByteArray> = try {
         val r = client.get(ruta) { con() }
         if (r.status.isSuccess()) ResultadoRed.Exito(r.readRawBytes()) else error(r)
@@ -183,7 +196,8 @@ class EyesApi(
                 if (cuerpo.codigo == "CONSENTIMIENTO_PENDIENTE") alPedirConsentimiento()
                 ResultadoRed.ErrorCliente(403, mensaje.ifBlank { "No tienes permiso para esto." })
             }
-            in 400..499 -> ResultadoRed.ErrorCliente(codigo, mensaje.ifBlank { "Solicitud inválida ($codigo)" })
+            429 -> ResultadoRed.ErrorCliente(429, mensaje.ifBlank { "Demasiados intentos. Espera un minuto y vuelve a intentar." }, cuerpo.codigo)
+            in 400..499 -> ResultadoRed.ErrorCliente(codigo, mensaje.ifBlank { "Solicitud inválida ($codigo)" }, cuerpo.codigo)
             else -> ResultadoRed.ErrorServidor(codigo, mensaje.ifBlank { "Error en el servidor ($codigo)" })
         }
     }

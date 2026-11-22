@@ -6,7 +6,7 @@ package com.example.eyesofterapp.data.network
 // los mensajes de error de AuthViewModel.
 //
 // Producción (Railway) — es el valor normal:
-//     const val BASE_URL = "https://eyesofterandroid-production.up.railway.app"
+//     const val BASE_URL = "https://eyesofter-api.up.railway.app"
 //
 // Servidor local en el EMULADOR de Android (backend corriendo con ./gradlew run):
 //     const val BASE_URL = "http://10.0.2.2:8080"
@@ -22,7 +22,7 @@ package com.example.eyesofterapp.data.network
 // Después de cambiarlo, vuelve a compilar e instalar la app.
 // ---------------------------------------------------------------------------
 
-const val BASE_URL = "https://eyesofterandroid-production.up.railway.app"
+const val BASE_URL = "https://eyesofter-api.up.railway.app"
 
 /**
  * Portal web (eyesofterweb): recuperación de contraseña (C-RFNN-02), aviso de privacidad

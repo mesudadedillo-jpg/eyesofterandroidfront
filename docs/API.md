@@ -44,7 +44,7 @@
 
 | Entorno | URL |
 |---|---|
-| Producción (Railway) | `https://eyesofterandroid-production.up.railway.app` |
+| Producción (Railway) | `https://eyesofter-api.up.railway.app` |
 | Local, desde la misma computadora | `http://localhost:8080` |
 | Local, desde el emulador de Android | `http://10.0.2.2:8080` |
 

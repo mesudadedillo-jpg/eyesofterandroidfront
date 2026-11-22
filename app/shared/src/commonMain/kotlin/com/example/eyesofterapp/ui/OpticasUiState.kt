@@ -17,5 +17,9 @@ data class OpticasUiState(
     val mostrandoCache: Boolean = false,
     val sinPermisoUbicacion: Boolean = false,
     val error: String? = null,
-    val busquedaTexto: String = ""
+    val busquedaTexto: String = "",
+    /** Nombre del lugar buscado por texto (ciudad, C.P.); null si la ubicación viene del GPS. */
+    val lugarBuscado: String? = null,
+    /** Radio en km en que se buscaron ópticas en OpenStreetMap (3, 10 o 30). */
+    val radioBusquedaKm: Int? = null
 )

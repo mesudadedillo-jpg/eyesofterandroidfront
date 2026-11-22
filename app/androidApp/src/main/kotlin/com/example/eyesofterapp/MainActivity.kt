@@ -1,5 +1,8 @@
 package com.example.eyesofterapp
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -56,6 +59,7 @@ class MainActivity : ComponentActivity() {
         if (granted) {
             negacionesSeguidas = 0
         } else {
+          feat/opticas-osm
             negacionesSeguidas++
             val puedeVolverAPreguntar =
                 ActivityCompat.shouldShowRequestPermissionRationale(
@@ -111,6 +115,7 @@ class MainActivity : ComponentActivity() {
             } else {
                 Toast.makeText(this, "Ubicación activada", Toast.LENGTH_SHORT).show()
                 onPermissionResultCallback?.invoke(true)
+              main
             }
         }
         val callback = onPermissionResultCallback
@@ -166,6 +171,27 @@ class MainActivity : ComponentActivity() {
             
             var showMap by remember { mutableStateOf(false) }
 
+
+          feat/opticas-osm
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (showMap) {
+                    PantallaMapa()
+                } else {
+                    App(locationProvider = locationProvider)
+                }
+
+                FloatingActionButton(
+                    onClick = { showMap = !showMap },
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                        .semantics {
+                            contentDescription = if (showMap) "Volver a la app" else "Abrir mapa con calles"
+                        }
+                ) {
+                    Text(if (showMap) "Volver" else "Mapa", modifier = Modifier.padding(horizontal = 12.dp))
+                    
             // El tema envuelve TODO, para que la pantalla de MapLibre también use
             // la paleta y la tipografía de EYESOFTER (antes quedaba con el estilo por defecto).
             EyeSofterTheme {
@@ -207,6 +233,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                  main
                 }
             }
         }

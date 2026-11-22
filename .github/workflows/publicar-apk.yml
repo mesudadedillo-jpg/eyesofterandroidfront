@@ -1,0 +1,109 @@
+# Compila la app de Android firmada y la publica en GitHub Releases como "eyesofter.apk".
+# La página "Descarga la app" del portal (/App) y el botón del escritorio apuntan siempre al
+# último APK publicado aquí:
+#   https://github.com/<dueño>/eyesofterandroidfront/releases/latest/download/eyesofter.apk
+#
+# Se lanza a mano: Actions → "Publicar APK" → Run workflow → versión (por ejemplo 1.1).
+# Necesita estos secretos del repositorio (Settings → Secrets and variables → Actions):
+#   EYESOFTER_KEYSTORE_BASE64    la llave de firma (.jks) en Base64
+#   EYESOFTER_KEYSTORE_PASSWORD  su contraseña
+#   EYESOFTER_KEY_ALIAS          el alias de la llave (por ejemplo "eyesofter")
+#   GOOGLE_SERVICES_JSON         (opcional) contenido de google-services.json, para notificaciones push
+name: Publicar APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión que verá la gente (por ejemplo 1.1)"
+        required: true
+        default: "1.0"
+      notas:
+        description: "Qué cambió (opcional)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publicar-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar la versión y los secretos
+        env:
+          VERSION: ${{ inputs.version }}
+          KEYSTORE_BASE64: ${{ secrets.EYESOFTER_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.EYESOFTER_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.EYESOFTER_KEY_ALIAS }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+            echo "::error::La versión debe verse como 1.1 o 1.1.2"; exit 1
+          fi
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Faltan los secretos de la llave de firma (EYESOFTER_KEYSTORE_BASE64, EYESOFTER_KEYSTORE_PASSWORD, EYESOFTER_KEY_ALIAS). Ver README, 'Publicar el APK'."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Preparar la llave de firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.EYESOFTER_KEYSTORE_BASE64 }}
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/eyesofter.jks"
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/androidApp/google-services.json
+            echo "Notificaciones push: activadas"
+          else
+            echo "::warning::Sin GOOGLE_SERVICES_JSON: el APK no tendrá notificaciones push (los avisos siguen llegando a la bandeja de la app)."
+          fi
+
+      - name: Compilar el APK firmado
+        env:
+          EYESOFTER_KEYSTORE: ${{ runner.temp }}/eyesofter.jks
+          EYESOFTER_KEYSTORE_PASSWORD: ${{ secrets.EYESOFTER_KEYSTORE_PASSWORD }}
+          EYESOFTER_KEY_ALIAS: ${{ secrets.EYESOFTER_KEY_ALIAS }}
+          EYESOFTER_VERSION_NAME: ${{ inputs.version }}
+          # Siempre crece: cada publicación puede instalarse encima de la anterior.
+          EYESOFTER_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:androidApp:assembleRelease
+          apk=$(find app/androidApp/build/outputs/apk/release -name '*.apk' | head -n 1)
+          if [ -z "$apk" ]; then echo "::error::No se generó el APK"; exit 1; fi
+          if [[ "$apk" == *unsigned* ]]; then echo "::error::El APK salió sin firmar"; exit 1; fi
+          cp "$apk" eyesofter.apk
+          sha256sum eyesofter.apk | tee eyesofter.apk.sha256
+
+      - name: Borrar la llave del equipo de compilación
+        if: always()
+        run: rm -f "$RUNNER_TEMP/eyesofter.jks" app/androidApp/google-services.json
+
+      - name: Publicar en GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          NOTAS: ${{ inputs.notas }}
+        run: |
+          etiqueta="app-v${VERSION}-${GITHUB_RUN_NUMBER}"
+          cuerpo="Instalador de la app EYESOFTER para Android, versión ${VERSION}.
+
+          Descárgalo desde la página oficial del portal (Descarga la app). Huella SHA-256: $(cut -d' ' -f1 eyesofter.apk.sha256)
+
+          ${NOTAS}"
+          gh release create "$etiqueta" eyesofter.apk eyesofter.apk.sha256 \
+            --title "App EYESOFTER ${VERSION}" --notes "$cuerpo" --target "$GITHUB_SHA" --latest

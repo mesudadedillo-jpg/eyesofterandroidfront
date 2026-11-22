@@ -43,11 +43,29 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.example.eyesofterapp"
+        // Identidad pública de la app (Play Store, Firebase). El código sigue en el paquete
+        // com.example.eyesofterapp (namespace); solo cambia cómo la reconoce Android.
+        applicationId = "mx.eyesofter.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0"
+        // El flujo "Publicar APK" (.github/workflows/publicar-apk.yml) los sube en cada versión:
+        // Android solo instala una actualización si versionCode es mayor que el instalado.
+        versionCode = System.getenv("EYESOFTER_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("EYESOFTER_VERSION_NAME") ?: "1.0"
+    }
+    // Firma de la versión que se publica. La llave NUNCA está en el repositorio: el flujo de
+    // GitHub la toma de los secretos del repositorio (ver README, "Publicar el APK").
+    // Siempre debe ser la misma llave: con otra, los teléfonos rechazan la actualización.
+    val llave = System.getenv("EYESOFTER_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (llave != null) {
+            create("publicacion") {
+                storeFile = llave
+                storePassword = System.getenv("EYESOFTER_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("EYESOFTER_KEY_ALIAS")
+                keyPassword = System.getenv("EYESOFTER_KEY_PASSWORD") ?: System.getenv("EYESOFTER_KEYSTORE_PASSWORD")
+            }
+        }
     }
     buildTypes {
         // C-RC-03: la versión que se publica solo habla HTTPS. HTTP solo en debug (servidor local).
@@ -62,6 +80,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (llave != null) signingConfig = signingConfigs.getByName("publicacion")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

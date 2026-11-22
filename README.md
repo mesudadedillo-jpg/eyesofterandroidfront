@@ -254,7 +254,7 @@ Capturas de todas las pantallas: [`docs/capturas/`](docs/capturas/).
 ### Activar las notificaciones push (Firebase)
 
 1. En la [consola de Firebase](https://console.firebase.google.com) crea el proyecto y agrega
-   una app Android con el paquete `com.example.eyesofterapp`.
+   una app Android con el paquete `mx.eyesofter.app`.
 2. Descarga `google-services.json` y ponlo en `app/androidApp/`. Está en `.gitignore`: no contiene
    secretos del servidor, pero es mejor no publicarlo.
 3. En el mismo proyecto: *Configuración → Cuentas de servicio → Generar clave privada* y pega el
@@ -264,12 +264,48 @@ Capturas de todas las pantallas: [`docs/capturas/`](docs/capturas/).
 Sin Firebase la app funciona igual: los avisos se ven en la bandeja (se revisa cada 5 s) y el
 servidor los manda por correo si está configurado Resend.
 
+## Publicar el APK (descarga para las familias)
+
+Las familias descargan la app desde la página **Descarga la app** del portal (`/App`), que también
+abre el botón *Descarga la app móvil* del escritorio. Esa página apunta siempre al último APK de
+**Releases** de este repositorio, así que publicar una versión nueva no requiere tocar el portal.
+
+### Una sola vez: la llave de firma
+
+Android solo instala una actualización si viene firmada con **la misma llave** que la versión
+instalada. Créala una vez en tu computadora (necesita Java; `keytool` viene con el JDK) y guárdala
+en un lugar seguro, fuera del repositorio (por ejemplo, un gestor de contraseñas):
+
+```powershell
+keytool -genkeypair -v -keystore eyesofter.jks -alias eyesofter -keyalg RSA -keysize 2048 -validity 10000
+# Te pide una contraseña y unos datos (nombre, organización); el alias es "eyesofter".
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\eyesofter.jks")) | Set-Clipboard
+# Ya quedó en el portapapeles en Base64.
+```
+
+En GitHub: **Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secreto | Valor |
+|---|---|
+| `EYESOFTER_KEYSTORE_BASE64` | Lo que quedó en el portapapeles |
+| `EYESOFTER_KEYSTORE_PASSWORD` | La contraseña de la llave |
+| `EYESOFTER_KEY_ALIAS` | `eyesofter` |
+| `GOOGLE_SERVICES_JSON` | (Opcional) Contenido de `google-services.json`, para las notificaciones push |
+
+> Si pierdes la llave no podrás actualizar la app: habría que desinstalarla y volver a instalarla.
+> No la subas al repositorio ni la compartas: con ella alguien podría publicar una app falsa
+> que se instale encima de la verdadera.
+
+### Cada vez que quieras publicar
+
+**Actions → Publicar APK → Run workflow**, escribe la versión (por ejemplo `1.1`) y espera unos
+minutos. El flujo compila la versión de producción (solo HTTPS), la firma, y la publica como
+`eyesofter.apk` con su huella SHA-256. El número interno de versión sube solo en cada publicación.
+
 ## Pendientes conocidos
 
-- **Firebase**: falta crear el proyecto y agregar `google-services.json` (ver arriba).
-- `URL_PORTAL` en `PlatformConfig.kt` debe apuntar a la URL pública real del portal web.
+- **Firebase**: falta crear el proyecto y agregar `google-services.json` (ver arriba). Al registrar la app Android en Firebase usa el paquete `mx.eyesofter.app`.
 - La pausa 20-20-20 solo corre con la app abierta (no hay servicio en segundo plano).
-- `applicationId` es `com.example.eyesofterapp`; Google Play no acepta `com.example`.
 - iOS no se ha compilado (requiere Mac). En iOS no hay `Telefono` ni `Push` todavía.
 
 Verificación de subida mediante conexión SSH (2026-11-04 09:14)

@@ -117,7 +117,7 @@ fun main(args: Array<String>) {
     }
 
     val pantallas: List<Pair<String, @Composable () -> Unit>> = listOf(
-        "01-login" to { LoginScreen(AuthUiState(), { _, _ -> }) },
+        "01-login" to { LoginScreen(AuthUiState(), { _, _, _ -> }) },
         "02-inicio-tutor" to { InicioScreen(tutor, panelTutor, {}, {}, {}) },
         "03-resultado-amarillo" to {
             CompositionLocalProvider(LocalTelefono provides telefonoFalso) {

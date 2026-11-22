@@ -1,30 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Frente del ícono de la app: el logotipo de EYESOFTER Web (Views/Shared/_Logo.cshtml),
+    un ojo con mira en el iris y líneas de "circuito" a los lados.
+
+    Los trazos son los del SVG original (caja de 64 x 32). El <group> los escala
+    a 0.95 y los centra en el lienzo de 108 x 108 de los íconos adaptables.
+    Android recorta el ícono con distintas formas (círculo, cuadrado...), y solo
+    se garantiza que se vea el círculo central de 66 dp: el ojo mide unos 57 dp
+    de ancho, así que cabe completo en cualquier forma.
+
+    Colores: trazos blancos y el iris en celeste ("eyes-celeste" de la web).
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:endX="85.84757"
-                android:endY="92.4963"
-                android:startX="42.9492"
-                android:startY="49.59793"
-                android:type="linear">
-                <item
-                    android:color="#44000000"
-                    android:offset="0.0" />
-                <item
-                    android:color="#00000000"
-                    android:offset="1.0" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillType="nonZero"
-        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
-        android:strokeWidth="1"
-        android:strokeColor="#00000000" />
+    <group
+        android:scaleX="0.95"
+        android:scaleY="0.95"
+        android:translateX="23.6"
+        android:translateY="38.8">
+        <!-- Contorno del ojo -->
+        <path
+            android:pathData="M13,16c5,-7.5 11.5,-11 19,-11s14,3.5 19,11c-5,7.5 -11.5,11 -19,11S18,23.5 13,16z"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <!-- Iris (radio 6.5) -->
+        <path
+            android:pathData="M25.5,16a6.5,6.5 0,1 0,13 0a6.5,6.5 0,1 0,-13 0z"
+            android:strokeColor="#9FC0F2"
+            android:strokeWidth="2" />
+        <!-- Pupila (radio 2.4) -->
+        <path
+            android:pathData="M29.6,16a2.4,2.4 0,1 0,4.8 0a2.4,2.4 0,1 0,-4.8 0z"
+            android:fillColor="#FFFFFF" />
+        <!-- Mira y líneas de circuito -->
+        <path
+            android:pathData="M32,7.5v3M32,21.5v3M23.5,16h3M37.5,16h3M13,16H8l-3.5,-4M13,16H8l-3.5,4M51,16h5l3.5,-4M51,16h5l3.5,4"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <!-- Terminales de los circuitos -->
+        <path
+            android:pathData="M2.3,11a1.3,1.3 0,1 0,2.6 0a1.3,1.3 0,1 0,-2.6 0zM2.3,21a1.3,1.3 0,1 0,2.6 0a1.3,1.3 0,1 0,-2.6 0zM59.1,11a1.3,1.3 0,1 0,2.6 0a1.3,1.3 0,1 0,-2.6 0zM59.1,21a1.3,1.3 0,1 0,2.6 0a1.3,1.3 0,1 0,-2.6 0z"
+            android:fillColor="#FFFFFF" />
+    </group>
 </vector>

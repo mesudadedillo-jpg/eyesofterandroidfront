@@ -14,6 +14,7 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+import com.example.eyesofterapp.domain.model.distanciaHaversineKm
 
 class OpticasApi(private val client: HttpClient) {
 
@@ -135,4 +136,8 @@ class OpticasApi(private val client: HttpClient) {
         val c = 2 * asin(min(1.0, sqrt(a)))
         return r * c
     }
+    // Usa la fórmula compartida (domain/model/Coordenadas.kt). Antes aquí había
+    // una copia con acos en lugar de asin, que daba distancias incorrectas.
+    private fun calcularHaversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double =
+        distanciaHaversineKm(lat1, lon1, lat2, lon2)
 }

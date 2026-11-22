@@ -43,6 +43,15 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.cos
+import com.example.eyesofterapp.domain.model.Coordenadas
+import com.example.eyesofterapp.domain.model.Optica
+
+private const val RADIO_BASE_KM = 5.0
+
 import com.example.eyesofterapp.composeApp.theme.aparecer
 import com.example.eyesofterapp.domain.model.distanciaHaversineKm
 import kotlin.math.PI
@@ -128,6 +137,22 @@ fun MapaOpticasView(
             }
         }
 
+        // Marcadores de ópticas proyectados según sus coordenadas reales,
+        // relativos a la ubicación del usuario (norte arriba). Radio visible: 5 km a zoom 1.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val referencia = userCoords
+                ?: opticas.firstOrNull()?.let { Coordenadas(it.lat, it.lng) }
+            val radioKm = RADIO_BASE_KM / zoomLevel
+            val kmPorGradoLng = 111.32 * cos(referencia?.lat?.let { it * PI / 180.0 } ?: 0.0)
+
+            if (referencia != null) opticas.forEach { optica ->
+                val dxKm = (optica.lng - referencia.lng) * kmPorGradoLng
+                val dyKm = (optica.lat - referencia.lat) * 110.57
+                // Las que quedan fuera del radio visible no se dibujan (usa ➖ para alejar).
+                if (abs(dxKm) > radioKm || abs(dyKm) > radioKm) return@forEach
+
+                val offsetX = (0.5 + dxKm / (2 * radioKm)).toFloat()
+                val offsetY = (0.5 - dyKm / (2 * radioKm)).toFloat()
         // Marcadores: se colocan como en un RADAR alrededor del usuario.
         //  - Dirección real: el ángulo apunta hacia donde está la óptica.
         //  - Distancia en escala logarítmica: las cercanas (Tulancingo) quedan
@@ -154,6 +179,51 @@ fun MapaOpticasView(
                 else posicionesRadar(opticas, origen, zoomLevel, centro, radioMax, separacion)
             }
 
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(
+                            start = (maxWidth * offsetX - 6.dp).coerceIn(0.dp, (maxWidth - 40.dp).coerceAtLeast(0.dp)),
+                            top = (maxHeight * offsetY - 30.dp).coerceIn(0.dp, (maxHeight - 40.dp).coerceAtLeast(0.dp))
+                        )
+                        .clickable { onSeleccionarOptica(optica) }
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = when {
+                                    isSelected -> MaterialTheme.colorScheme.primary
+                                    esVerificada -> Color(0xFF2E7D32)
+                                    else -> Color(0xFFE0E0E0)
+                                }
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp)
+                        ) {
+                            Text(
+                                text = if (esVerificada) "✅ ${optica.nombre}" else "⚪ ${optica.nombre}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (esVerificada) FontWeight.Bold else FontWeight.Normal,
+                                color = when {
+                                    isSelected || esVerificada -> Color.White
+                                    else -> Color(0xFF424242)
+                                },
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(
+                                    when {
+                                        isSelected -> MaterialTheme.colorScheme.primary
+                                        esVerificada -> Color(0xFF2E7D32)
+                                        else -> Color(0xFF9E9E9E)
+                                    },
+                                    CircleShape
+                                )
+                        )
+                    }
             opticas.forEach { optica ->
                 val destino = posiciones[optica.id] ?: return@forEach
                 key(optica.id) {
@@ -192,6 +262,23 @@ fun MapaOpticasView(
             modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            // Zoom In
+            Card(
+                modifier = Modifier.clickable { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.5f) },
+                shape = CircleShape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Text("➕", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodyMedium)
+            }
+            // Zoom Out
+            Card(
+                modifier = Modifier.clickable { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.1f) },
+                shape = CircleShape,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Text("➖", modifier = Modifier.padding(10.dp), style = MaterialTheme.typography.bodyMedium)
             ControlMapa("+", "Acercar") { zoomLevel = (zoomLevel + 0.25f).coerceAtMost(2.5f) }
             ControlMapa("−", "Alejar") { zoomLevel = (zoomLevel - 0.25f).coerceAtLeast(0.6f) }
             ControlMapa(if (mapaExpandido) "↥" else "↧", "Cambiar tamaño", activo = mapaExpandido) {

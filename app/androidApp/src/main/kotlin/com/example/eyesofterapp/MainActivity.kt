@@ -1,10 +1,8 @@
 package com.example.eyesofterapp
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -48,14 +46,37 @@ import com.example.eyesofterapp.location.AndroidLocationProvider
 class MainActivity : ComponentActivity() {
 
     private var onPermissionResultCallback: ((Boolean) -> Unit)? = null
+    private var negacionesSeguidas = 0
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
+        // Basta con FINE o COARSE (en Android 12+ el usuario puede elegir "Aproximada").
         val granted = permissions.values.any { it }
         if (granted) {
-            checkGpsAndReturn(true)
+            negacionesSeguidas = 0
         } else {
+            negacionesSeguidas++
+            val puedeVolverAPreguntar =
+                ActivityCompat.shouldShowRequestPermissionRationale(
+                    this, Manifest.permission.ACCESS_FINE_LOCATION
+                ) || ActivityCompat.shouldShowRequestPermissionRationale(
+                    this, Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            if (!puedeVolverAPreguntar && negacionesSeguidas >= 2) {
+                // Android ya no muestra el diálogo: hay que activarlo a mano en Ajustes.
+                Toast.makeText(
+                    this,
+                    "Permiso de ubicación bloqueado. Actívalo en Ajustes > Permisos > Ubicación.",
+                    Toast.LENGTH_LONG
+                ).show()
+                startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", packageName, null)
+                    }
+                )
+            } else {
+                Toast.makeText(this, "❌ Permiso de ubicación denegado", Toast.LENGTH_SHORT).show()
             // Evaluamos el caso "Denegado Permanentemente"
             val shouldShowRationale = ActivityCompat.shouldShowRequestPermissionRationale(
                 this, Manifest.permission.ACCESS_FINE_LOCATION
@@ -91,33 +112,41 @@ class MainActivity : ComponentActivity() {
                 Toast.makeText(this, "Ubicación activada", Toast.LENGTH_SHORT).show()
                 onPermissionResultCallback?.invoke(true)
             }
-        } else {
-            onPermissionResultCallback?.invoke(false)
         }
+        val callback = onPermissionResultCallback
         onPermissionResultCallback = null
+        callback?.invoke(granted)
     }
 
+    /** Lo llama AndroidLocationProvider cuando no hay permiso. */
     fun solicitarPermisosUbicacion(callback: (Boolean) -> Unit) {
         val fineGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-
         val coarseGranted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        onPermissionResultCallback = callback
-
         if (fineGranted || coarseGranted) {
-            checkGpsAndReturn(true)
-        } else {
-            requestPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
+            callback(true)
+            return
         }
+
+        // Si había una solicitud pendiente, la cerramos para que su corrutina no quede colgada.
+        onPermissionResultCallback?.invoke(false)
+        onPermissionResultCallback = callback
+        requestPermissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
+    }
+
+    /** Lo llama AndroidLocationProvider cuando la ubicación del sistema está apagada. */
+    private fun abrirAjustesDeUbicacion() {
+        Toast.makeText(this, "📍 La ubicación está apagada. Actívala y vuelve a la app.", Toast.LENGTH_LONG).show()
+        startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,7 +159,8 @@ class MainActivity : ComponentActivity() {
             val locationProvider = remember {
                 AndroidLocationProvider(
                     context = this,
-                    requestPermission = ::solicitarPermisosUbicacion
+                    requestPermission = ::solicitarPermisosUbicacion,
+                    onUbicacionApagada = ::abrirAjustesDeUbicacion
                 )
             }
             

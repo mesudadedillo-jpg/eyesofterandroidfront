@@ -135,6 +135,87 @@ fun OpticasScreen(
             if (state.cargando) {
                 item(key = "cargando") { Cargando() }
             }
+            state.coordenadasGps?.let { coords ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.tertiaryContainer
+                                         else MaterialTheme.colorScheme.secondaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (state.esUbicacionSimulada)
+                                    "🎯 GPS simulado: ${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}"
+                                else
+                                    "📡 GPS real: ${formatoCoord(coords.lat)}, ${formatoCoord(coords.lng)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.onTertiaryContainer
+                                       else MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = if (state.esUbicacionSimulada)
+                                    "Ubicación de demostración (Tulancingo, Hgo). NO viene del sensor."
+                                else buildString {
+                                    append(if (state.esUltimaConocida) "Última posición conocida" else "Lectura del sensor")
+                                    state.proveedorGps?.let { append(" ($it)") }
+                                    state.precisionMetros?.let { append(" · precisión ±${it.toInt()} m") }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (state.esUbicacionSimulada) MaterialTheme.colorScheme.onTertiaryContainer
+                                       else MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        if (state.esUbicacionSimulada) {
+                            Button(onClick = onSolicitarUbicacion) {
+                                Text("📍 GPS Real", fontSize = 11.sp)
+                // Estado del GPS: píldora (real o simulado) + coordenadas + acción para cambiar.
+                state.coordenadasGps?.let { coords ->
+                    EyesTarjeta(Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (state.esUbicacionSimulada) {
+                                    EyesPildora("Ubicación simulada", EyesColors.AmarilloBg, EyesColors.AmarilloFg)
+                                } else {
+                                    EyesPildora("GPS real activo", EyesColors.VerdeBg, EyesColors.VerdeFg)
+                                }
+                                Text(
+                                    text = "${coords.lat.cuatroDecimales()}, ${coords.lng.cuatroDecimales()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = EyesColors.TextoSecundario
+                                )
+                                Text(
+                                    text = if (state.esUbicacionSimulada)
+                                        "Punto de demostración en Tulancingo, Hgo., para probar el sensor."
+                                    else
+                                        "Coordenadas obtenidas del sensor de posicionamiento.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = EyesColors.TextoTenue
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            if (state.esUbicacionSimulada) {
+                                EyesBotonFantasma("Usar GPS", onClick = onSolicitarUbicacion)
+                            } else {
+                                EyesBotonFantasma("Simular", onClick = onSimularUbicacion)
+                            }
+                        }
+                    }
+                }
 
             state.error?.let { mensaje ->
                 item(key = "error") {
@@ -420,6 +501,10 @@ private fun Resumen(cantidad: Int, state: OpticasUiState) {
         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
     )
 }
+private fun formatoCoord(valor: Double): String =
+    ((valor * 100_000).toLong() / 100_000.0).toString()
+/** Coordenada con 4 decimales (unos 11 m de precisión), por ejemplo 20.0825. */
+private fun Double.cuatroDecimales(): String = ((this * 10_000).roundToLong() / 10_000.0).toString()
 
 @Composable
 private fun EstadoVacio(hayFiltros: Boolean) {

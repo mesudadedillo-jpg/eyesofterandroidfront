@@ -254,7 +254,7 @@ Capturas de todas las pantallas: [`docs/capturas/`](docs/capturas/).
 ### Activar las notificaciones push (Firebase)
 
 1. En la [consola de Firebase](https://console.firebase.google.com) crea el proyecto y agrega
-   una app Android con el paquete `com.example.eyesofterapp`.
+   una app Android con el paquete `mx.eyesofter.app`.
 2. Descarga `google-services.json` y ponlo en `app/androidApp/`. Está en `.gitignore`: no contiene
    secretos del servidor, pero es mejor no publicarlo.
 3. En el mismo proyecto: *Configuración → Cuentas de servicio → Generar clave privada* y pega el
@@ -304,10 +304,8 @@ minutos. El flujo compila la versión de producción (solo HTTPS), la firma, y l
 
 ## Pendientes conocidos
 
-- **Firebase**: falta crear el proyecto y agregar `google-services.json` (ver arriba).
-- `URL_PORTAL` en `PlatformConfig.kt` debe apuntar a la URL pública real del portal web.
+- **Firebase**: falta crear el proyecto y agregar `google-services.json` (ver arriba). Al registrar la app Android en Firebase usa el paquete `mx.eyesofter.app`.
 - La pausa 20-20-20 solo corre con la app abierta (no hay servicio en segundo plano).
-- `applicationId` es `com.example.eyesofterapp`; Google Play no acepta `com.example`.
 - iOS no se ha compilado (requiere Mac). En iOS no hay `Telefono` ni `Push` todavía.
 
 Verificación de subida mediante conexión SSH (2026-11-04 09:14)

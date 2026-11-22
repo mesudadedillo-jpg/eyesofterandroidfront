@@ -43,7 +43,9 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.example.eyesofterapp"
+        // Identidad pública de la app (Play Store, Firebase). El código sigue en el paquete
+        // com.example.eyesofterapp (namespace); solo cambia cómo la reconoce Android.
+        applicationId = "mx.eyesofter.app"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         // El flujo "Publicar APK" (.github/workflows/publicar-apk.yml) los sube en cada versión:

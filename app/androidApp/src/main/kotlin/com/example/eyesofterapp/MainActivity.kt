@@ -11,7 +11,11 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.eyesofterapp.location.AndroidLocationProvider
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,6 +80,7 @@ class MainActivity : ComponentActivity() {
                     onUbicacionApagada = ::abrirAjustesDeUbicacion,
                 )
             }
+            Box(Modifier.fillMaxSize()) {
             App(
                 locationProvider = ubicacion,
                 telefono = telefono,
@@ -87,6 +92,9 @@ class MainActivity : ComponentActivity() {
                 rutaExterna = rutaPush,
                 onRutaAtendida = { rutaPush.value = null },
             )
+            // Si se publicó un APK más nuevo en GitHub Releases, ofrece actualizar.
+            AvisoActualizacion(Modifier.align(Alignment.BottomCenter))
+            }
         }
     }
 

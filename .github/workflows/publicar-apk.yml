@@ -80,6 +80,7 @@ jobs:
           EYESOFTER_VERSION_NAME: ${{ inputs.version }}
           # Siempre crece: cada publicación puede instalarse encima de la anterior.
           EYESOFTER_VERSION_CODE: ${{ github.run_number }}
+          NOTAS: ${{ inputs.notas }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon :app:androidApp:assembleRelease
@@ -88,6 +89,10 @@ jobs:
           if [[ "$apk" == *unsigned* ]]; then echo "::error::El APK salió sin firmar"; exit 1; fi
           cp "$apk" eyesofter.apk
           sha256sum eyesofter.apk | tee eyesofter.apk.sha256
+          # La app lo lee al abrir: si versionCode es mayor que el instalado, muestra "Actualizar".
+          jq -n --argjson code "$EYESOFTER_VERSION_CODE" --arg name "$EYESOFTER_VERSION_NAME" --arg notas "$NOTAS" \
+            '{versionCode: $code, versionName: $name, notas: $notas}' > version.json
+          cat version.json
 
       - name: Borrar la llave del equipo de compilación
         if: always()
@@ -105,5 +110,5 @@ jobs:
           Descárgalo desde la página oficial del portal (Descarga la app). Huella SHA-256: $(cut -d' ' -f1 eyesofter.apk.sha256)
 
           ${NOTAS}"
-          gh release create "$etiqueta" eyesofter.apk eyesofter.apk.sha256 \
+          gh release create "$etiqueta" eyesofter.apk eyesofter.apk.sha256 version.json \
             --title "App EYESOFTER ${VERSION}" --notes "$cuerpo" --target "$GITHUB_SHA" --latest

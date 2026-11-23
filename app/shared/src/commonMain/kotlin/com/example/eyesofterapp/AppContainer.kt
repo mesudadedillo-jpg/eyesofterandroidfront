@@ -13,6 +13,7 @@ import com.example.eyesofterapp.domain.usecase.LoginUseCase
 import com.example.eyesofterapp.location.LocationProvider
 import com.example.eyesofterapp.ui.OpticasViewModel
 import com.example.eyesofterapp.ui.PanelViewModel
+import com.example.eyesofterapp.ui.RecuperacionViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +32,10 @@ class AppContainer(
 
     /** Sin sesión: para reportar una falla desde el login (C-RS-04). */
     val apiSinSesion = EyesApi(httpClient, token = { null }, alVencerSesion = {})
+
+    /** "¿Olvidaste tu contraseña?" (sin sesión). Se cierra al salir de la pantalla. */
+    fun crearRecuperacion(): RecuperacionViewModel =
+        RecuperacionViewModel(apiSinSesion, CoroutineScope(SupervisorJob() + Dispatchers.Main))
 
     fun crearOpticasViewModel(): OpticasViewModel =
         OpticasViewModel(opticasApi, locationProvider)

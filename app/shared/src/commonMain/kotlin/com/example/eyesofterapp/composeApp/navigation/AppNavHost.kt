@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.backhandler.BackHandler
@@ -28,6 +29,7 @@ import com.example.eyesofterapp.composeApp.screens.NotificacionesScreen
 import com.example.eyesofterapp.composeApp.screens.NuevoAvisoScreen
 import com.example.eyesofterapp.composeApp.screens.OpticasScreen
 import com.example.eyesofterapp.composeApp.screens.PausaVisualScreen
+import com.example.eyesofterapp.composeApp.screens.RecuperarPasswordScreen
 import com.example.eyesofterapp.composeApp.screens.SeguimientoScreen
 import com.example.eyesofterapp.composeApp.screens.TamizajeScreen
 import com.example.eyesofterapp.composeApp.theme.EyesMotion
@@ -75,10 +77,33 @@ fun AppNavHost(
 ) {
     val sesion = state.session
     if (sesion == null) {
-        LoginScreen(state, onLogin)
+        SinSesion(container, state, onLogin)
         return
     }
     PanelConSesion(container, sesion, onLogout, token, onSesionVencida, onConsentimientoAceptado, directorioNativo, rutaExterna, onRutaAtendida, alIniciarPanel)
+}
+
+/** Login o, si lo pidió, "¿Olvidaste tu contraseña?". "Atrás" regresa al login. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun SinSesion(container: AppContainer, state: AuthUiState, onLogin: (String, String, String?) -> Unit) {
+    var recuperando by rememberSaveable { mutableStateOf(false) }
+    if (!recuperando) {
+        LoginScreen(state, onLogin, onOlvide = { recuperando = true })
+        return
+    }
+    val recuperacion = remember { container.crearRecuperacion() }
+    DisposableEffect(recuperacion) { onDispose { recuperacion.cerrar() } }
+    val estado by recuperacion.state.collectAsState()
+    BackHandler { recuperando = false }
+    RecuperarPasswordScreen(
+        state = estado,
+        onPedirCodigo = recuperacion::pedirCodigo,
+        onReenviar = recuperacion::reenviar,
+        onRestablecer = recuperacion::restablecer,
+        onCambiarCuenta = recuperacion::cambiarCuenta,
+        onVolver = { recuperando = false },
+    )
 }
 
 @OptIn(ExperimentalComposeUiApi::class)

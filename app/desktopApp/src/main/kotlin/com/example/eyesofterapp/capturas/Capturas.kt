@@ -19,6 +19,9 @@ import com.example.eyesofterapp.data.model.EventoDto
 import com.example.eyesofterapp.data.model.PaseDto
 import com.example.eyesofterapp.composeApp.screens.InicioScreen
 import com.example.eyesofterapp.composeApp.screens.LoginScreen
+import com.example.eyesofterapp.composeApp.screens.RecuperarPasswordScreen
+import com.example.eyesofterapp.ui.PasoRecuperacion
+import com.example.eyesofterapp.ui.RecuperacionUiState
 import com.example.eyesofterapp.composeApp.screens.NotificacionesScreen
 import com.example.eyesofterapp.composeApp.screens.NuevoAvisoScreen
 import com.example.eyesofterapp.composeApp.screens.OpticasScreen
@@ -117,7 +120,18 @@ fun main(args: Array<String>) {
     }
 
     val pantallas: List<Pair<String, @Composable () -> Unit>> = listOf(
-        "01-login" to { LoginScreen(AuthUiState(), { _, _ -> }) },
+        "01-login" to { LoginScreen(AuthUiState(), { _, _, _ -> }) },
+        "01b-recuperar-cuenta" to { RecuperarPasswordScreen(RecuperacionUiState(), {}, {}, { _, _, _ -> }, {}, {}) },
+        "01c-recuperar-codigo" to {
+            RecuperarPasswordScreen(
+                RecuperacionUiState(
+                    paso = PasoRecuperacion.Codigo, cuenta = "tutor@eyesofter.mx", reenviarEn = 42,
+                    aviso = "Si los datos corresponden a una cuenta, te enviamos un código de 6 dígitos a tu correo. Vence en 10 minutos.",
+                    error = "El código no es correcto. Te quedan 4 intentos.",
+                ),
+                {}, {}, { _, _, _ -> }, {}, {}
+            )
+        },
         "02-inicio-tutor" to { InicioScreen(tutor, panelTutor, {}, {}, {}) },
         "03-resultado-amarillo" to {
             CompositionLocalProvider(LocalTelefono provides telefonoFalso) {

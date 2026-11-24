@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -107,11 +108,19 @@ fun LoginScreen(
     )
 
     // Los Modifier se aplican EN ORDEN, de arriba hacia abajo
+    // El contenido mide al menos lo que la pantalla: así el pie legal (aviso, ayuda) queda
+    // abajo del todo en teléfonos altos en vez de flotar a media pantalla. Si no cabe, se desplaza.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(EyesColors.Fondo)) {
+    val altoPantalla = maxHeight
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(EyesColors.Fondo)
             .verticalScroll(rememberScrollState())
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = altoPantalla)
             .imePadding()               // sube el contenido cuando aparece el teclado
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -262,7 +271,8 @@ fun LoginScreen(
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        // Empuja el pie hasta abajo (en pantallas altas).
+        Spacer(Modifier.weight(1f).heightIn(min = 12.dp))
         Text(
             "Tu cuenta te la da la escuela. Es la misma del portal web.",
             style = MaterialTheme.typography.bodySmall, color = EyesColors.TextoTenue,
@@ -275,5 +285,7 @@ fun LoginScreen(
         }
         EyesBotonTexto("Tu información está segura", onClick = { uriPie.openUri("$URL_PORTAL/Privacidad/Seguridad") })
         Spacer(Modifier.height(16.dp))
+    }
+    }
     }
 }

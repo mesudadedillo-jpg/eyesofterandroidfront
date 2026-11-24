@@ -37,10 +37,28 @@ fun App(
     /** Ruta de la push que el usuario tocó ("tamizaje/12"...). */
     rutaExterna: StateFlow<String?>? = null,
     onRutaAtendida: () -> Unit = {},
+    /**
+     * versionCode del APK instalado (solo Android). Si hay uno más nuevo publicado,
+     * la app pide actualizar antes de dejar entrar. null en escritorio y web.
+     */
+    versionInstalada: Int? = null,
+    versionInstaladaNombre: String = "",
 ) {
     EyeSofterTheme {
         CompositionLocalProvider(LocalTelefono provides telefono) {
             val container = remember(locationProvider) { AppContainer(locationProvider) }
+
+            var nuevaVersion by remember { androidx.compose.runtime.mutableStateOf<com.example.eyesofterapp.data.network.VersionPublicada?>(null) }
+            if (versionInstalada != null) {
+                androidx.compose.runtime.LaunchedEffect(versionInstalada) {
+                    val publicada = container.versionApi.ultima()
+                    if (com.example.eyesofterapp.data.network.requiereActualizar(versionInstalada, publicada)) nuevaVersion = publicada
+                }
+            }
+            val pendiente = nuevaVersion
+            if (pendiente != null) {
+                com.example.eyesofterapp.composeApp.screens.ActualizarScreen(pendiente, versionInstaladaNombre.ifBlank { versionInstalada.toString() })
+            } else {
 
             val authViewModel = viewModel<AuthViewModel> {
                 AuthViewModel(container.loginUseCase, container.opticasApi, container.sesionGuardada)
@@ -74,6 +92,7 @@ fun App(
                     if (push != null) scope.launch { push.token()?.let { panel.registrarPush(it, push.plataforma) } }
                 },
             )
+            }
         }
     }
 }

@@ -3,7 +3,10 @@
 # último APK publicado aquí:
 #   https://github.com/<dueño>/eyesofterandroidfront/releases/latest/download/eyesofter.apk
 #
-# Se lanza a mano: Actions → "Publicar APK" → Run workflow → versión (por ejemplo 1.1).
+# Se lanza SOLO en cada cambio a main que toque la app (o a mano: Actions → "Publicar APK").
+# Cada publicación sube también version.json: la app lo lee al abrir y, si hay una versión
+# más nueva que la instalada, no deja entrar hasta actualizar. Se conservan los 3 releases
+# más recientes del APK; el 4.º y anteriores se borran (con su etiqueta).
 # Necesita estos secretos del repositorio (Settings → Secrets and variables → Actions):
 #   EYESOFTER_KEYSTORE_BASE64    la llave de firma (.jks) en Base64
 #   EYESOFTER_KEYSTORE_PASSWORD  su contraseña
@@ -12,12 +15,20 @@
 name: Publicar APK
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - ".github/workflows/publicar-apk.yml"
   workflow_dispatch:
     inputs:
       version:
-        description: "Versión que verá la gente (por ejemplo 1.1)"
-        required: true
-        default: "1.0"
+        description: "Versión que verá la gente (vacío = automática, 1.<número de compilación>)"
+        required: false
+        default: ""
       notas:
         description: "Qué cambió (opcional)"
         required: false
@@ -39,11 +50,15 @@ jobs:
 
       - name: Revisar la versión y los secretos
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION_MANUAL: ${{ inputs.version }}
           KEYSTORE_BASE64: ${{ secrets.EYESOFTER_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.EYESOFTER_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.EYESOFTER_KEY_ALIAS }}
         run: |
+          VERSION="${VERSION_MANUAL:-1.${GITHUB_RUN_NUMBER}}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # versionCode siempre crece y empieza en 100 (los APK de desarrollo tienen 1 y no se bloquean).
+          echo "VERSION_CODE=$((GITHUB_RUN_NUMBER + 100))" >> "$GITHUB_ENV"
           if ! [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
             echo "::error::La versión debe verse como 1.1 o 1.1.2"; exit 1
           fi
@@ -77,10 +92,10 @@ jobs:
           EYESOFTER_KEYSTORE: ${{ runner.temp }}/eyesofter.jks
           EYESOFTER_KEYSTORE_PASSWORD: ${{ secrets.EYESOFTER_KEYSTORE_PASSWORD }}
           EYESOFTER_KEY_ALIAS: ${{ secrets.EYESOFTER_KEY_ALIAS }}
-          EYESOFTER_VERSION_NAME: ${{ inputs.version }}
-          # Siempre crece: cada publicación puede instalarse encima de la anterior.
-          EYESOFTER_VERSION_CODE: ${{ github.run_number }}
+          # VERSION y VERSION_CODE vienen del primer paso. Siempre crece: cada
+          # publicación se instala encima de la anterior.
         run: |
+          export EYESOFTER_VERSION_NAME="$VERSION" EYESOFTER_VERSION_CODE="$VERSION_CODE"
           chmod +x gradlew
           ./gradlew --no-daemon :app:androidApp:assembleRelease
           apk=$(find app/androidApp/build/outputs/apk/release -name '*.apk' | head -n 1)
@@ -96,14 +111,30 @@ jobs:
       - name: Publicar en GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-          NOTAS: ${{ inputs.notas }}
+          NOTAS: ${{ inputs.notas || github.event.head_commit.message }}
         run: |
           etiqueta="app-v${VERSION}-${GITHUB_RUN_NUMBER}"
-          cuerpo="Instalador de la app EYESOFTER para Android, versión ${VERSION}.
+          notas_cortas=$(printf '%s' "$NOTAS" | head -n 1 | cut -c1-200)
+          # La app lee este archivo (releases/latest/download/version.json) para exigir la actualización.
+          jq -n --argjson code "$VERSION_CODE" --arg name "$VERSION" --arg notas "$notas_cortas" \
+             --arg apk "https://github.com/${GITHUB_REPOSITORY}/releases/download/${etiqueta}/eyesofter.apk" \
+             '{versionCode: $code, versionName: $name, apk: $apk, notas: $notas}' > version.json
+          cat version.json
+          cuerpo="Instalador de la app EYESOFTER para Android, versión ${VERSION} (código ${VERSION_CODE}).
 
           Descárgalo desde la página oficial del portal (Descarga la app). Huella SHA-256: $(cut -d' ' -f1 eyesofter.apk.sha256)
 
           ${NOTAS}"
-          gh release create "$etiqueta" eyesofter.apk eyesofter.apk.sha256 \
+          gh release create "$etiqueta" eyesofter.apk eyesofter.apk.sha256 version.json \
             --title "App EYESOFTER ${VERSION}" --notes "$cuerpo" --target "$GITHUB_SHA" --latest
+
+      - name: Conservar solo los 3 APK más recientes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("app-v"))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' |
+          while read -r viejo; do
+            echo "Borrando $viejo"
+            gh release delete "$viejo" --yes --cleanup-tag
+          done

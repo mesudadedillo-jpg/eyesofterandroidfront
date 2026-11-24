@@ -30,6 +30,9 @@ class AppContainer(
     val opticasApi = OpticasApi(httpClient) { sesionGuardada.leer()?.token }
     val almacen = AlmacenLocal()
 
+    /** Versión obligatoria de la app (Android). */
+    val versionApi = com.example.eyesofterapp.data.network.VersionApi(httpClient)
+
     /** Sin sesión: para reportar una falla desde el login (C-RS-04). */
     val apiSinSesion = EyesApi(httpClient, token = { null }, alVencerSesion = {})
 

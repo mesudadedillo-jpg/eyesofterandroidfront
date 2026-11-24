@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,8 +73,12 @@ fun InicioScreen(
         Column(Modifier.fillMaxSize().background(EyesColors.Fondo)) {
             BarraInicio(noLeidas = state.bandeja.noLeidas, onNotificaciones = { onAbrir(Screen.Notificaciones) }, onLogout = onLogout)
             PullToRefreshBox(isRefreshing = state.cargando, onRefresh = onRefrescar, modifier = Modifier.fillMaxSize()) {
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+                val altoPantalla = maxHeight
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Column(
-                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).navigationBarsPadding()
+                    // Al menos el alto de la pantalla: la ayuda y los enlaces legales quedan abajo.
+                    Modifier.fillMaxWidth().heightIn(min = altoPantalla).navigationBarsPadding()
                         .padding(horizontal = 20.dp, vertical = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -105,7 +110,10 @@ fun InicioScreen(
                             "Pide a Dirección que revise tu usuario."
                         )
                     }
+                    Spacer(Modifier.weight(1f))
                     Ayuda(onAbrir)
+                }
+                }
                 }
             }
         }

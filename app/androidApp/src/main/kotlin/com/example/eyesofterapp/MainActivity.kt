@@ -86,9 +86,18 @@ class MainActivity : ComponentActivity() {
                 push = push,
                 rutaExterna = rutaPush,
                 onRutaAtendida = { rutaPush.value = null },
+                versionInstalada = versionInstalada(),
+                versionInstaladaNombre = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull().orEmpty(),
             )
         }
     }
+
+    /** versionCode del APK instalado: se compara con el último publicado en GitHub. */
+    @Suppress("DEPRECATION")
+    private fun versionInstalada(): Int = runCatching {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        if (android.os.Build.VERSION.SDK_INT >= 28) info.longVersionCode.toInt() else info.versionCode
+    }.getOrDefault(0)
 
     /** La app ya estaba abierta y el usuario tocó una push. */
     override fun onNewIntent(intent: Intent) {
